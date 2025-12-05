@@ -1,0 +1,35 @@
+local button = script.Parent
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local funcMuaLinh = ReplicatedStorage:WaitForChild("ChucNangMuaLinh")
+
+-- Biến để tránh spam nút liên tục
+local dangMua = false
+
+button.MouseButton1Click:Connect(function()
+	if dangMua then return end
+	dangMua = true
+
+	-- Gửi yêu cầu lên Server và ĐỢI câu trả lời
+	local ketQua = funcMuaLinh:InvokeServer()
+
+	if ketQua == "ThanhCong" then
+		print("✅ Mua thành công!")
+		-- Hiệu ứng nút nháy xanh
+		button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+		button.Text = "ĐÃ MUA!"
+		task.wait(0.5)
+		button.BackgroundColor3 = Color3.fromRGB(255, 170, 0) -- Màu gốc
+		button.Text = "MUA LÍNH (10 Vàng)"
+
+	elseif ketQua == "HetTien" then
+		print("❌ Không đủ tiền!")
+		-- Hiệu ứng nút nháy đỏ
+		button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+		button.Text = "KHÔNG ĐỦ TIỀN!"
+		task.wait(1)
+		button.BackgroundColor3 = Color3.fromRGB(255, 170, 0)
+		button.Text = "MUA LÍNH (10 Vàng)"
+	end
+
+	dangMua = false
+end)
