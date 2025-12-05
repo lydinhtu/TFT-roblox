@@ -1,0 +1,72 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local workspace = game:GetService("Workspace")
+local funcMuaLinh = ReplicatedStorage:WaitForChild("ChucNangMuaLinh")
+
+-- Lấy mẫu lính
+local linhMau = ServerStorage:WaitForChild("LinhTa") 
+local GIA_TIEN = 10
+
+-- Tìm hàng chờ
+local folderHangCho = workspace:WaitForChild("HangCho")
+
+-- Hàm tìm ô trống (Giữ nguyên)
+local function TimSlotTrong()
+	local cacSlot = folderHangCho:GetChildren()
+	table.sort(cacSlot, function(a, b) return a.Name < b.Name end)
+	for _, slot in pairs(cacSlot) do
+		local coNguoi = false
+		for _, v in pairs(workspace:GetChildren()) do
+			if v:FindFirstChild("HumanoidRootPart") then
+				if (v.HumanoidRootPart.Position - slot.Position).Magnitude < 2 then
+					coNguoi = true
+					break
+				end
+			end
+		end
+		if not coNguoi then return slot end
+	end
+	return nil
+end
+
+funcMuaLinh.OnServerInvoke = function(player)
+	local stats = player:FindFirstChild("leaderstats")
+	if not stats then return "Loi" end
+	local gold = stats.Gold
+
+	if gold.Value < GIA_TIEN then return "HetTien" end
+
+	local slotTrong = TimSlotTrong()
+	if not slotTrong then return "HetCho" end
+
+	-- Trừ tiền
+	gold.Value = gold.Value - GIA_TIEN
+
+	-- Sinh lính
+	local linhMoi = linhMau:Clone()
+	linhMoi.Parent = workspace
+
+	-- 1. TÊN ĐỂ CODE XỬ LÝ (Bắt buộc phải có tên người chơi)
+	linhMoi.Name = "Linh_" .. player.Name .. "_" .. math.random(1, 10000)
+
+	-- 2. TÊN ĐỂ HIỂN THỊ RA NGOÀI (Cho đẹp)
+	if linhMoi:FindFirstChild("Humanoid") then
+		linhMoi.Humanoid.DisplayName = "Chiến Binh" -- Bạn sửa chữ này tùy ý
+	end
+
+	-- Đặt vị trí vào Slot
+	if linhMoi:FindFirstChild("HumanoidRootPart") then
+		linhMoi.HumanoidRootPart.CFrame = slotTrong.CFrame + Vector3.new(0, 3, 0)
+	end
+
+	-- Gán Level
+	local s = linhMoi.Humanoid:FindFirstChild("Stats")
+	if s and not s:FindFirstChild("Level") then
+		local lv = Instance.new("IntValue")
+		lv.Name = "Level"
+		lv.Value = 1
+		lv.Parent = s
+	end
+
+	return "ThanhCong"
+end
