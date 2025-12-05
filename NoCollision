@@ -1,0 +1,39 @@
+local PhysicsService = game:GetService("PhysicsService")
+local groupName = "NhomNPC"
+
+-- 1. Tạo nhóm va chạm mới
+local success, err = pcall(function()
+	PhysicsService:RegisterCollisionGroup(groupName)
+end)
+
+-- 2. Cài đặt: Nhóm này KHÔNG va chạm với chính nó
+-- (Tức là NPC đi xuyên qua NPC)
+PhysicsService:CollisionGroupSetCollidable(groupName, groupName, false)
+
+-- 3. Hàm gán NPC vào nhóm
+local function GanNhomVaCham(model)
+	if model:IsA("Model") then
+		for _, part in pairs(model:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CollisionGroup = groupName
+			end
+		end
+	end
+end
+
+-- 4. Tự động áp dụng cho mọi NPC mới sinh ra trong Workspace
+workspace.ChildAdded:Connect(function(child)
+	-- Đợi 1 chút để chắc chắn NPC tải xong
+	task.wait(0.1)
+	if child:FindFirstChild("Humanoid") then
+		GanNhomVaCham(child)
+		print("👻 Đã tắt va chạm cho: " .. child.Name)
+	end
+end)
+
+-- Áp dụng cho các NPC đang có sẵn trên map lúc bắt đầu game
+for _, child in pairs(workspace:GetChildren()) do
+	if child:FindFirstChild("Humanoid") then
+		GanNhomVaCham(child)
+	end
+end
