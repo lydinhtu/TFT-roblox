@@ -2,11 +2,12 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SuKienDiChuyen = ReplicatedStorage:WaitForChild("SuKienDiChuyen")
 local DangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
 local workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
 
 local KICH_THUOC_O = 6 
 local folderHangCho = workspace:WaitForChild("HangCho")
 
--- Hàm làm tròn số theo lưới (Cho sàn đấu)
+-- 1. Hàm tính tâm ô (Dành cho sàn đấu)
 local function LayTamO(position, yPos)
 	local nuaO = KICH_THUOC_O / 2
 	local x = (math.floor(position.X / KICH_THUOC_O) * KICH_THUOC_O) + nuaO
@@ -14,17 +15,50 @@ local function LayTamO(position, yPos)
 	return Vector3.new(x, yPos, z)
 end
 
+-- 2. Hàm kiểm tra ô trống (Quan trọng để không bị chồng)
+local function KiemTraOTrong(viTriDich, unitDangDiChuyen)
+	for _, v in pairs(workspace:GetChildren()) do
+		-- Bỏ qua chính bản thân con lính đang di chuyển
+		if v == unitDangDiChuyen then continue end
+
+		-- Bỏ qua người chơi (Player) để không bị kẹt bởi chính bạn
+		if Players:GetPlayerFromCharacter(v) then continue end
+
+		-- Kiểm tra xem có lính nào khác đứng đó không
+		if v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") then
+			local posLinh = v.HumanoidRootPart.Position * Vector3.new(1, 0, 1)
+			local posDich = viTriDich * Vector3.new(1, 0, 1)
+
+			-- Nếu khoảng cách < 1.5 mét -> Đã có người đứng
+			if (posLinh - posDich).Magnitude < 1.5 then
+				return false -- KHÔNG TRỐNG
+			end
+		end
+	end
+	return true -- TRỐNG
+end
+
+-- 3. Xử lý sự kiện di chuyển
 SuKienDiChuyen.OnServerEvent:Connect(function(player, unit, clickPosition)
-	if DangDanhNhau.Value == true then return end -- Đang đánh nhau thì cấm di chuyển
+	-- Nếu đang đánh nhau thì cấm di chuyển
+	if DangDanhNhau.Value == true then 
+		warn("⛔ Đang chiến đấu, không thể di chuyển!")
+		return 
+	end
+
 	if not unit or not unit:FindFirstChild("HumanoidRootPart") then return end
 
 	local rootPart = unit.HumanoidRootPart
 	local humanoid = unit:FindFirstChild("Humanoid")
+
+	-- Lưu vị trí cũ (Để lỡ có lỗi thì còn biết nó ở đâu - dù logic dưới đây là không di chuyển luôn)
+	local viTriCu = rootPart.CFrame
+
 	local viTriDich = nil
 	local trangThaiRaTran = true -- Mặc định là ra trận
 
-	-- 1. KIỂM TRA XEM CÓ THẢ VÀO HÀNG CHỜ KHÔNG?
-	local khoangCachNganNhat = 5 -- Chỉ bắt dính nếu thả gần ô hàng chờ (5 mét)
+	-- A. KIỂM TRA XEM CÓ KÉO VÀO HÀNG CHỜ KHÔNG?
+	local khoangCachNganNhat = 5
 	local slotGanNhat = nil
 
 	for _, slot in pairs(folderHangCho:GetChildren()) do
@@ -38,24 +72,42 @@ SuKienDiChuyen.OnServerEvent:Connect(function(player, unit, clickPosition)
 	end
 
 	if slotGanNhat then
-		-- A. NẾU THẢ GẦN HÀNG CHỜ -> HÍT VÀO HÀNG CHỜ
-		viTriDich = slotGanNhat.Position + Vector3.new(0, 3, 0)
-		trangThaiRaTran = false -- Về hàng chờ nghỉ ngơi
-		print("Đã chuyển về hàng chờ: " .. slotGanNhat.Name)
+		-- >>> TRƯỜNG HỢP 1: VÀO HÀNG CHỜ <<<
+		local viTriDuKien = slotGanNhat.Position + Vector3.new(0, 3, 0)
+
+		-- Kiểm tra xem Slot này có ai đứng chưa?
+		if KiemTraOTrong(viTriDuKien, unit) then
+			viTriDich = viTriDuKien
+			trangThaiRaTran = false -- Về hàng chờ nghỉ ngơi
+			print("✅ Chuyển về hàng chờ: " .. slotGanNhat.Name)
+		else
+			warn("❌ Ô hàng chờ đã có người! Hủy di chuyển.")
+			return -- DỪNG LẠI NGAY (Lính sẽ đứng yên tại chỗ cũ)
+		end
 	else
-		-- B. NẾU KHÔNG -> XẾP LÊN SÀN ĐẤU (THEO LƯỚI)
-		viTriDich = LayTamO(clickPosition, rootPart.Position.Y + 3)
-		trangThaiRaTran = true -- Ra trận chiến đấu
+		-- >>> TRƯỜNG HỢP 2: RA SÀN ĐẤU <<<
+		local viTriDuKien = LayTamO(clickPosition, rootPart.Position.Y + 3)
+
+		-- Kiểm tra xem ô trên bàn cờ có ai đứng chưa?
+		if KiemTraOTrong(viTriDuKien, unit) then
+			viTriDich = viTriDuKien
+			trangThaiRaTran = true -- Ra trận
+		else
+			warn("❌ Ô trên sàn đấu đã có người! Hủy di chuyển.")
+			return -- DỪNG LẠI NGAY
+		end
 	end
 
-	-- 2. THỰC HIỆN DI CHUYỂN
-	rootPart.Anchored = false
-	rootPart.CFrame = CFrame.new(viTriDich) * rootPart.CFrame.Rotation
+	-- B. THỰC HIỆN DI CHUYỂN (Chỉ chạy xuống đây nếu các bước trên đều OK)
+	if viTriDich then
+		rootPart.Anchored = false
+		rootPart.CFrame = CFrame.new(viTriDich) * rootPart.CFrame.Rotation
 
-	if humanoid then
-		humanoid:MoveTo(rootPart.Position)
+		if humanoid then
+			humanoid:MoveTo(rootPart.Position)
+		end
+
+		unit:SetAttribute("DaRaTran", trangThaiRaTran)
+		print("🚀 Di chuyển thành công!")
 	end
-
-	-- Cập nhật trạng thái
-	unit:SetAttribute("DaRaTran", trangThaiRaTran)
 end)
