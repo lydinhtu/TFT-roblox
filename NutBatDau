@@ -1,0 +1,39 @@
+local button = script.Parent
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local remote = ReplicatedStorage:WaitForChild("SuKienBatDau")
+local bienDangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
+
+-- 1. KHI BẤM NÚT
+button.MouseButton1Click:Connect(function()
+	if bienDangDanhNhau.Value == false then
+		remote:FireServer()
+		-- (Không cần đổi chữ ở đây, hàm bên dưới sẽ tự lo)
+	end
+end)
+
+-- 2. TỰ ĐỘNG ĐỔI CHỮ KHI TRẠNG THÁI GAME THAY ĐỔI
+-- Hàm này sẽ chạy mỗi khi biến DangDanhNhau thay đổi (True <-> False)
+bienDangDanhNhau.Changed:Connect(function(dangDanh)
+	if dangDanh == true then
+		-- TRƯỜNG HỢP 1: ĐANG ĐÁNH NHAU (True)
+		button.Text = "⛔ TRẬN ĐẤU ĐANG DIỄN RA..."
+		button.BackgroundColor3 = Color3.fromRGB(0, 0, 0) -- Màu xám
+		button.Active = false -- Khóa nút không cho bấm
+	else
+		-- TRƯỜNG HỢP 2: ĐÃ XONG 1 HIỆP (False)
+		button.Text = "⚔️ BẮT ĐẦU" -- Hoặc sửa thành "BẮT ĐẦU" tùy ý bạn
+		button.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Màu xanh lá
+		button.Active = true -- Mở khóa cho bấm lại
+	end
+end)
+
+-- Cập nhật ngay lúc mới vào game cho đúng trạng thái
+if bienDangDanhNhau.Value == true then
+	button.Text = "⛔ TRẬN ĐẤU ĐANG DIỄN RA..."
+	button.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+	button.Active = false
+else
+	button.Text = "⚔️ BẮT ĐẦU"
+	button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+	button.Active = true
+end
