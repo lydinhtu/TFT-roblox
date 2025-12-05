@@ -1,229 +1,39 @@
-local npc = script.Parent
-local humanoid = npc:WaitForChild("Humanoid")
-local rootPart = npc:WaitForChild("HumanoidRootPart")
+local ServerScriptService = game:GetService("ServerScriptService")
+local TweenService = game:GetService("TweenService") -- Cần dùng Tween thì gọi ở đây
+local UnitAI = require(ServerScriptService:WaitForChild("UnitAI"))
 
--- === CẤU HÌNH ===
-local KICH_THUOC_O = 6 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService") -- [MỚI] Dùng để làm đạn bay
-local bienDangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
-
-local folderDatCho = workspace:FindFirstChild("DatCho") or Instance.new("Folder", workspace)
-if folderDatCho.Name ~= "DatCho" then folderDatCho.Name = "DatCho" end
-
-local stats = humanoid:WaitForChild("Stats")
-local myTeam = stats:WaitForChild("Team").Value
-local statsTamDanh = stats:WaitForChild("TamDanh")
-local statsSatThuong = stats:WaitForChild("SatThuong")
-local statsTocDoDanh = stats:WaitForChild("TocDoDanh")
-local statsTocDoDiChuyen = stats:WaitForChild("TocDoDiChuyen")
-
--- Animation Bắn (Bạn có thể đổi ID khác cho hợp với tư thế bắn súng/cung)
-local animAttackID = "rbxassetid://507777826" 
-local animAttackObj = Instance.new("Animation")
-animAttackObj.AnimationId = animAttackID
-local attackTrack = humanoid:LoadAnimation(animAttackObj)
-
-humanoid.AutoRotate = false 
-local daChet = false
-local viTriNha = rootPart.Position 
-local dangDanhNhauTruocDo = false 
-
--- === HÀM TẠO HIỆU ỨNG ĐẠN ===
-local function BanDan(mucTieu)
-	-- 1. Tạo viên đạn
+-- 1. ĐỊNH NGHĨA KỸ NĂNG RIÊNG (Nằm gọn trong file này)
+local function ChieuBanCung(npc, mucTieu, satThuong)
+	-- Tạo mũi tên
 	local dan = Instance.new("Part")
-	dan.Name = "Dan"
-	dan.Shape = Enum.PartType.Ball
-	dan.Size = Vector3.new(1, 1, 1)
-	dan.Material = Enum.Material.Neon
-	dan.Color = Color3.fromRGB(255, 255, 0) -- Màu vàng
-	dan.CanCollide = false
+	dan.Name = "MuiTen"
+	dan.Size = Vector3.new(0.5, 0.5, 2)
+	dan.Color = Color3.fromRGB(255, 255, 0)
 	dan.Anchored = true
-	dan.Position = rootPart.Position + Vector3.new(0, 1, 0) -- Xuất phát từ ngực
+	dan.CanCollide = false
+	dan.CFrame = CFrame.new(npc.HumanoidRootPart.Position + Vector3.new(0, 1, 0), mucTieu.Position)
 	dan.Parent = workspace
 
-	-- 2. Tính toán thời gian bay (Bay càng xa càng lâu)
-	local khoangCach = (mucTieu.Position - rootPart.Position).Magnitude
-	local thoiGianBay = khoangCach / 40 -- Tốc độ đạn (số càng lớn bay càng nhanh)
-
-	-- 3. Tạo chuyển động (Tween)
-	local tweenInfo = TweenInfo.new(thoiGianBay, Enum.EasingStyle.Linear)
+	-- Bay đến mục tiêu
+	local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Linear)
 	local tween = TweenService:Create(dan, tweenInfo, {Position = mucTieu.Position})
-
 	tween:Play()
 
-	-- 4. Khi bay tới nơi -> Gây sát thương và xóa đạn
 	tween.Completed:Connect(function()
 		dan:Destroy()
+		-- Gây sát thương khi trúng
 		local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
-		if eHum and eHum.Health > 0 then
-			eHum:TakeDamage(statsSatThuong.Value)
-
-			-- Hiệu ứng nổ nhỏ khi trúng (Tùy chọn)
-			local no = Instance.new("Explosion")
-			no.Position = mucTieu.Position
-			no.BlastRadius = 0 -- Không gây nổ lan
-			no.BlastPressure = 0
-			no.Parent = workspace
-			game:GetService("Debris"):AddItem(no, 1)
-		end
+		if eHum then eHum:TakeDamage(satThuong) end
 	end)
 end
 
--- === CÁC HÀM HỖ TRỢ DI CHUYỂN (GIỮ NGUYÊN TỪ LINHTA1) ===
-local function LayTamO(position)
-	local nuaO = KICH_THUOC_O / 2
-	local x = (math.floor(position.X / KICH_THUOC_O) * KICH_THUOC_O) + nuaO
-	local z = (math.floor(position.Z / KICH_THUOC_O) * KICH_THUOC_O) + nuaO
-	return Vector3.new(x, rootPart.Position.Y, z)
-end
+-- 2. CẤU HÌNH VÀ GỬI KỸ NĂNG CHO AI
+local config = {
+	AnimationID = "rbxassetid://507777826",
 
-local function KiemTraOTrong(viTri)
-	for _, v in pairs(workspace:GetChildren()) do
-		if v ~= npc and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-			local root = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("RootPart")
-			if root and (root.Position - viTri).Magnitude < 2 then return false end
-		end
-	end
-	for _, gach in pairs(folderDatCho:GetChildren()) do
-		if (gach.Position - viTri).Magnitude < 1 then return false end
-	end
-	return true
-end
+	-- Truyền cái hàm bên trên vào đây!
+	KyNangTanCong = ChieuBanCung 
+}
 
-local function DatChoVaDiChuyen(viTriMuonDen)
-	local gachMoi = Instance.new("Part")
-	gachMoi.Name = "GachCua_" .. npc.Name
-	gachMoi.Size = Vector3.new(1, 1, 1)
-	gachMoi.Position = viTriMuonDen
-	gachMoi.Anchored = true
-	gachMoi.CanCollide = false 
-	gachMoi.Transparency = 1 
-	gachMoi.Parent = folderDatCho
-	game:GetService("Debris"):AddItem(gachMoi, 2)
-	return gachMoi
-end
-
-local function DonDepSachSe()
-	for _, gach in pairs(folderDatCho:GetChildren()) do
-		if gach.Name == "GachCua_" .. npc.Name then gach:Destroy() end
-	end
-end
-
-humanoid.Died:Connect(function()
-	daChet = true
-	DonDepSachSe() 
-	if attackTrack then attackTrack:Stop() end
-	npc:BreakJoints()
-	task.wait(2)
-	npc:Destroy()
-end)
-
--- === VÒNG LẶP CHÍNH ===
-while not daChet do
-	task.wait(0.1)
-	if humanoid.Health <= 0 then daChet = true break end
-
-	local dangDanhNhauHienTai = bienDangDanhNhau.Value
-
-	-- [[ CHẾ ĐỘ NGHỈ ]]
-	if dangDanhNhauHienTai == false then
-		humanoid.WalkSpeed = 0 
-		rootPart.Anchored = false 
-		DonDepSachSe()
-		if humanoid.Health < humanoid.MaxHealth then humanoid.Health = humanoid.MaxHealth end
-
-		if dangDanhNhauTruocDo == true then
-			rootPart.CFrame = CFrame.new(viTriNha)
-		else
-			viTriNha = rootPart.Position
-		end
-		dangDanhNhauTruocDo = dangDanhNhauHienTai
-		continue 
-	end
-	dangDanhNhauTruocDo = dangDanhNhauHienTai
-
-	-- [[ CHẾ ĐỘ CHIẾN ĐẤU ]]
-	local daRaTran = npc:GetAttribute("DaRaTran")
-
-	if daRaTran == true then
-		-- A. TÌM KẺ ĐỊCH
-		local mucTieu = nil
-		local minDst = math.huge
-		for _, v in pairs(workspace:GetChildren()) do
-			if v ~= npc and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-				local eStats = v.Humanoid:FindFirstChild("Stats")
-				if eStats and eStats:FindFirstChild("Team") and eStats.Team.Value ~= myTeam then
-					local dist = (rootPart.Position - v.HumanoidRootPart.Position).Magnitude
-					if dist < minDst then
-						minDst = dist
-						mucTieu = v.HumanoidRootPart
-					end
-				end
-			end
-		end
-
-		if mucTieu then
-			-- Xoay mặt về phía địch
-			local huongNhin = Vector3.new(mucTieu.Position.X, rootPart.Position.Y, mucTieu.Position.Z)
-			rootPart.CFrame = rootPart.CFrame:Lerp(CFrame.lookAt(rootPart.Position, huongNhin), 0.2)
-
-			local dist = (rootPart.Position - mucTieu.Position).Magnitude
-			-- Lấy tầm đánh từ Stats (Với LinhTa2 thì số này sẽ lớn, ví dụ 18)
-			local tamDanh = math.max(statsTamDanh.Value, KICH_THUOC_O - 1)
-
-			if dist <= tamDanh then
-				-- B. TRONG TẦM NGẮM -> BẮN
-				humanoid.WalkSpeed = 0 
-				DonDepSachSe()
-
-				attackTrack:Play() -- Diễn hoạt cảnh bắn
-
-				-- Chờ 1 chút để khớp với động tác tay (ví dụ giơ tay lên mới bắn)
-				task.wait(0.3) 
-
-				-- Bắn đạn ra
-				BanDan(mucTieu)
-
-				-- Chờ hồi chiêu
-				task.wait(math.max(0.1, (1 / statsTocDoDanh.Value) - 0.3))
-			else
-				-- C. NGOÀI TẦM NGẮM -> DI CHUYỂN TIẾP CẬN
-				-- (Logic di chuyển giữ nguyên như cũ để nó biết đường đi theo ô)
-				humanoid.WalkSpeed = statsTocDoDiChuyen.Value
-
-				local tamO_Dich = LayTamO(mucTieu.Position)
-				local tamO_Minh = LayTamO(rootPart.Position)
-				local diffX = tamO_Dich.X - tamO_Minh.X
-				local diffZ = tamO_Dich.Z - tamO_Minh.Z
-
-				local oTiepTheo = tamO_Minh
-				if math.abs(diffX) >= KICH_THUOC_O then
-					oTiepTheo = tamO_Minh + Vector3.new(math.sign(diffX) * KICH_THUOC_O, 0, 0)
-				elseif math.abs(diffZ) >= KICH_THUOC_O then
-					oTiepTheo = tamO_Minh + Vector3.new(0, 0, math.sign(diffZ) * KICH_THUOC_O)
-				end
-
-				if KiemTraOTrong(oTiepTheo) then
-					local cucGach = DatChoVaDiChuyen(oTiepTheo)
-					humanoid:MoveTo(oTiepTheo)
-					local timeout = 0
-					while (rootPart.Position - oTiepTheo).Magnitude > 1 and timeout < 10 do
-						task.wait(0.05)
-						timeout = timeout + 1
-					end
-					if cucGach then cucGach:Destroy() end
-				else
-					humanoid:MoveTo(rootPart.Position)
-					task.wait(0.1)
-				end
-			end
-		else
-			humanoid:MoveTo(rootPart.Position) -- Không thấy địch
-		end
-	else
-		humanoid.WalkSpeed = 0
-		rootPart.Anchored = true
-	end
-end
+-- Kích hoạt
+UnitAI.KhoiTao(script.Parent, config)
