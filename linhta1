@@ -2,7 +2,7 @@ local npc = script.Parent
 local humanoid = npc:WaitForChild("Humanoid")
 local rootPart = npc:WaitForChild("HumanoidRootPart")
 
--- [QUAN TRỌNG] Lưu vị trí ban đầu
+-- Lưu vị trí ban đầu
 local viTriNha = rootPart.Position 
 
 -- === KẾT NỐI ===
@@ -12,7 +12,7 @@ local bienDangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
 -- === CẤU HÌNH ===
 local KICH_THUOC_O = 6 
 
--- Folder Gạch
+-- Folder Gạch (Giữ nguyên logic cũ)
 if not workspace:FindFirstChild("DatCho") then
 	local folder = Instance.new("Folder")
 	folder.Name = "DatCho"
@@ -90,25 +90,19 @@ while not daChet do
 
 	local dangDanhNhauHienTai = bienDangDanhNhau.Value
 
-	-- [[ CHẾ ĐỘ CHỜ (SỬA LỖI TẠI ĐÂY) ]]
+	-- [[ CHẾ ĐỘ CHỜ (Không đánh nhau) ]]
 	if dangDanhNhauHienTai == false then
 		humanoid.WalkSpeed = 0 
-
-		-- [FIX] Nhổ neo để có thể kéo thả được
 		rootPart.Anchored = false
-
-		-- [FIX] Dừng múa may
 		if attackTrack then attackTrack:Stop() end
 
 		if humanoid.Health < humanoid.MaxHealth then humanoid.Health = humanoid.MaxHealth end
 		DonDepSachSe()
 
 		if dangDanhNhauTruocDo == true then
-			-- Vừa hết trận -> Reset về nhà
-			rootPart.CFrame = CFrame.new(viTriNha)
+			rootPart.CFrame = CFrame.new(viTriNha) -- Hết trận -> Về vị trí cũ
 		else
-			-- Đang chờ -> Cập nhật vị trí nhà mới
-			viTriNha = rootPart.Position
+			viTriNha = rootPart.Position -- Đang chờ -> Cập nhật vị trí nhà tại chỗ đang đứng
 		end
 
 		dangDanhNhauTruocDo = dangDanhNhauHienTai
@@ -117,67 +111,78 @@ while not daChet do
 
 	dangDanhNhauTruocDo = dangDanhNhauHienTai
 
-	-- [[ CHẾ ĐỘ CHIẾN ĐẤU ]]
-	humanoid.WalkSpeed = statsTocDoDiChuyen.Value
+	-- [[ CHẾ ĐỘ CHIẾN ĐẤU (CHỈ CHẠY KHI ĐÃ RA TRẬN) ]]
+	-- >>>> ĐÂY LÀ DÒNG QUAN TRỌNG NHẤT VỪA THÊM VÀO <<<<
+	if npc:GetAttribute("DaRaTran") == true then
 
-	local mucTieu = nil
-	local minDst = math.huge
+		humanoid.WalkSpeed = statsTocDoDiChuyen.Value
 
-	for _, v in pairs(workspace:GetChildren()) do
-		if v ~= npc and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-			local eRoot = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("RootPart")
-			local eStats = v.Humanoid:FindFirstChild("Stats")
-			if eRoot and eStats and eStats:FindFirstChild("Team") then
-				if eStats.Team.Value ~= myTeam then
-					local dist = (rootPart.Position - eRoot.Position).Magnitude
-					if dist < minDst then
-						minDst = dist
-						mucTieu = eRoot
+		local mucTieu = nil
+		local minDst = math.huge
+
+		for _, v in pairs(workspace:GetChildren()) do
+			if v ~= npc and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+				local eRoot = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("RootPart")
+				local eStats = v.Humanoid:FindFirstChild("Stats")
+				if eRoot and eStats and eStats:FindFirstChild("Team") then
+					if eStats.Team.Value ~= myTeam then
+						local dist = (rootPart.Position - eRoot.Position).Magnitude
+						if dist < minDst then
+							minDst = dist
+							mucTieu = eRoot
+						end
 					end
 				end
 			end
 		end
-	end
 
-	if mucTieu then
-		local tamO_Dich = LayTamO(mucTieu.Position)
-		local tamO_Minh = LayTamO(rootPart.Position)
-		local diffX = tamO_Dich.X - tamO_Minh.X
-		local diffZ = tamO_Dich.Z - tamO_Minh.Z
-		local khoangCachManhattan = math.abs(diffX) + math.abs(diffZ)
+		if mucTieu then
+			local tamO_Dich = LayTamO(mucTieu.Position)
+			local tamO_Minh = LayTamO(rootPart.Position)
+			local diffX = tamO_Dich.X - tamO_Minh.X
+			local diffZ = tamO_Dich.Z - tamO_Minh.Z
+			local khoangCachManhattan = math.abs(diffX) + math.abs(diffZ)
 
-		if khoangCachManhattan <= math.max(statsTamDanh.Value, KICH_THUOC_O) then
-			-- TẤN CÔNG -> BẬT MỎ NEO
-			rootPart.Anchored = true 
-			DonDepSachSe() 
-			local viTriDichY = Vector3.new(mucTieu.Position.X, rootPart.Position.Y, mucTieu.Position.Z)
-			rootPart.CFrame = CFrame.lookAt(rootPart.Position, viTriDichY)
-			attackTrack:Play()
-			task.wait(0.3) 
-			local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
-			if eHum and eHum.Health > 0 then eHum:TakeDamage(statsSatThuong.Value) end
-			task.wait(statsTocDoDanh.Value - 0.3) 
-		else
-			-- DI CHUYỂN -> TẮT MỎ NEO
-			rootPart.Anchored = false 
-			local oTiepTheo = tamO_Minh
-			if math.abs(diffX) >= KICH_THUOC_O then
-				oTiepTheo = tamO_Minh + Vector3.new(math.sign(diffX) * KICH_THUOC_O, 0, 0)
-			elseif math.abs(diffZ) >= KICH_THUOC_O then
-				oTiepTheo = tamO_Minh + Vector3.new(0, 0, math.sign(diffZ) * KICH_THUOC_O)
-			end
-			local cucGach = KiemTraVaDatCho(oTiepTheo)
-			if cucGach then
-				rootPart.CFrame = CFrame.lookAt(rootPart.Position, Vector3.new(oTiepTheo.X, rootPart.Position.Y, oTiepTheo.Z))
-				humanoid:MoveTo(oTiepTheo)
-				humanoid.MoveToFinished:Wait() 
-				if cucGach then cucGach:Destroy() end
+			if khoangCachManhattan <= math.max(statsTamDanh.Value, KICH_THUOC_O) then
+				-- TẤN CÔNG
+				rootPart.Anchored = true 
+				DonDepSachSe() 
+				local viTriDichY = Vector3.new(mucTieu.Position.X, rootPart.Position.Y, mucTieu.Position.Z)
+				rootPart.CFrame = CFrame.lookAt(rootPart.Position, viTriDichY)
+				attackTrack:Play()
+				task.wait(0.3) 
+				local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
+				if eHum and eHum.Health > 0 then eHum:TakeDamage(statsSatThuong.Value) end
+				task.wait(statsTocDoDanh.Value - 0.3) 
 			else
-				humanoid:MoveTo(rootPart.Position) 
-				task.wait(math.random(1, 3) * 0.1) 
+				-- DI CHUYỂN
+				rootPart.Anchored = false 
+				local oTiepTheo = tamO_Minh
+				if math.abs(diffX) >= KICH_THUOC_O then
+					oTiepTheo = tamO_Minh + Vector3.new(math.sign(diffX) * KICH_THUOC_O, 0, 0)
+				elseif math.abs(diffZ) >= KICH_THUOC_O then
+					oTiepTheo = tamO_Minh + Vector3.new(0, 0, math.sign(diffZ) * KICH_THUOC_O)
+				end
+				local cucGach = KiemTraVaDatCho(oTiepTheo)
+				if cucGach then
+					rootPart.CFrame = CFrame.lookAt(rootPart.Position, Vector3.new(oTiepTheo.X, rootPart.Position.Y, oTiepTheo.Z))
+					humanoid:MoveTo(oTiepTheo)
+					humanoid.MoveToFinished:Wait() 
+					if cucGach then cucGach:Destroy() end
+				else
+					humanoid:MoveTo(rootPart.Position) 
+					task.wait(math.random(1, 3) * 0.1) 
+				end
 			end
+		else
+			-- Không thấy địch thì đứng yên
+			humanoid:MoveTo(rootPart.Position)
 		end
+
 	else
+		-- [[ NẾU ĐANG CÓ TRẬN ĐẤU MÀ CHƯA RA TRẬN (ĐANG Ở HÀNG CHỜ) ]]
 		DonDepSachSe()
+		humanoid.WalkSpeed = 0
+		-- Đứng yên xem các bạn đánh nhau
 	end
 end
