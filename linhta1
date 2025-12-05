@@ -7,11 +7,9 @@ local KICH_THUOC_O = 6
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local bienDangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
 
--- Tạo thư mục đặt chỗ nếu chưa có
 local folderDatCho = workspace:FindFirstChild("DatCho") or Instance.new("Folder", workspace)
 if folderDatCho.Name ~= "DatCho" then folderDatCho.Name = "DatCho" end
 
--- Chỉ số
 local stats = humanoid:WaitForChild("Stats")
 local myTeam = stats:WaitForChild("Team").Value
 local statsTamDanh = stats:WaitForChild("TamDanh")
@@ -19,7 +17,7 @@ local statsSatThuong = stats:WaitForChild("SatThuong")
 local statsTocDoDanh = stats:WaitForChild("TocDoDanh")
 local statsTocDoDiChuyen = stats:WaitForChild("TocDoDiChuyen")
 
--- Animation Đánh Thường
+-- Animation
 local animAttackID = "rbxassetid://507777826"
 local animAttackObj = Instance.new("Animation")
 animAttackObj.AnimationId = animAttackID
@@ -30,7 +28,9 @@ local daChet = false
 local viTriNha = rootPart.Position 
 local dangDanhNhauTruocDo = false 
 
--- Hàm hỗ trợ Grid
+-- === CÁC HÀM TRÍ TUỆ NHÂN TẠO (AI) ===
+
+-- 1. Hàm làm tròn vị trí vào tâm ô
 local function LayTamO(position)
 	local nuaO = KICH_THUOC_O / 2
 	local x = (math.floor(position.X / KICH_THUOC_O) * KICH_THUOC_O) + nuaO
@@ -38,21 +38,67 @@ local function LayTamO(position)
 	return Vector3.new(x, rootPart.Position.Y, z)
 end
 
--- Hàm tìm ô trống để đi (Tránh đè lên nhau)
-local function KiemTraVaDatCho(viTriMuonDen)
-	-- Check vật lý (Lính khác)
+-- 2. Hàm kiểm tra xem 1 ô bất kỳ có đang bị ai đứng không
+local function KiemTraOTrong(viTri)
+	-- Quét lính
 	for _, v in pairs(workspace:GetChildren()) do
 		if v ~= npc and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
 			local root = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("RootPart")
-			if root and (root.Position - viTriMuonDen).Magnitude < 3 then return nil end
+			-- Nếu có ai đứng trong bán kính 2m tính từ tâm ô
+			if root and (root.Position - viTri).Magnitude < 2 then 
+				return false -- Không trống
+			end
 		end
 	end
-	-- Check gạch đặt chỗ
+	-- Quét gạch xí chỗ (DatCho)
 	for _, gach in pairs(folderDatCho:GetChildren()) do
-		if (gach.Position - viTriMuonDen).Magnitude < 1 then return nil end
+		if (gach.Position - viTri).Magnitude < 1 then 
+			return false -- Đã có người đặt gạch
+		end
+	end
+	return true -- Trống
+end
+
+-- 3. [MỚI] Hàm tìm vị trí tấn công tốt nhất xung quanh kẻ địch
+local function TimViTriTanCong(mucTieu)
+	local viTriDich = LayTamO(mucTieu.Position)
+	local danhSachO = {}
+
+	-- Liệt kê 4 ô xung quanh địch (Trên, Dưới, Trái, Phải)
+	local cacHuong = {
+		Vector3.new(KICH_THUOC_O, 0, 0),  -- Phải
+		Vector3.new(-KICH_THUOC_O, 0, 0), -- Trái
+		Vector3.new(0, 0, KICH_THUOC_O),  -- Dưới
+		Vector3.new(0, 0, -KICH_THUOC_O)  -- Trên
+	}
+
+	for _, huong in ipairs(cacHuong) do
+		local oXungQuanh = viTriDich + huong
+		-- Nếu ô này trống HOẶC chính là chỗ mình đang đứng -> Thêm vào danh sách tiềm năng
+		if (rootPart.Position - oXungQuanh).Magnitude < 1 or KiemTraOTrong(oXungQuanh) then
+			table.insert(danhSachO, oXungQuanh)
+		end
 	end
 
-	-- Đặt gạch xí chỗ
+	-- Tìm ô gần mình nhất trong danh sách các ô trống đó
+	local oTotNhat = nil
+	local khoangCachNganNhat = math.huge
+
+	for _, o in ipairs(danhSachO) do
+		local dist = (rootPart.Position - o).Magnitude
+		if dist < khoangCachNganNhat then
+			khoangCachNganNhat = dist
+			oTotNhat = o
+		end
+	end
+
+	-- Nếu tìm được ô trống ngon lành thì trả về, không thì trả về chính vị trí địch (để lính bu vào chờ)
+	return oTotNhat or viTriDich
+end
+
+-- 4. Hàm đặt gạch xí chỗ (Để không ai chen vào ô mình sắp đi tới)
+local function DatChoVaDiChuyen(viTriMuonDen)
+	-- Tạo cục gạch vô hình
 	local gachMoi = Instance.new("Part")
 	gachMoi.Name = "GachCua_" .. npc.Name
 	gachMoi.Size = Vector3.new(1, 1, 1)
@@ -61,8 +107,8 @@ local function KiemTraVaDatCho(viTriMuonDen)
 	gachMoi.CanCollide = false 
 	gachMoi.Transparency = 1 
 	gachMoi.Parent = folderDatCho
-	game:GetService("Debris"):AddItem(gachMoi, 2)
-	return gachMoi 
+	game:GetService("Debris"):AddItem(gachMoi, 2) -- Tự xóa sau 2s đề phòng kẹt
+	return gachMoi
 end
 
 local function DonDepSachSe()
@@ -87,31 +133,28 @@ while not daChet do
 
 	local dangDanhNhauHienTai = bienDangDanhNhau.Value
 
-	-- 1. GIAI ĐOẠN CHUẨN BỊ (NGHỈ NGƠI)
+	-- [[ CHẾ ĐỘ NGHỈ ]]
 	if dangDanhNhauHienTai == false then
 		humanoid.WalkSpeed = 0 
 		rootPart.Anchored = false 
 		DonDepSachSe()
-
 		if humanoid.Health < humanoid.MaxHealth then humanoid.Health = humanoid.MaxHealth end
 
-		-- Quay về vị trí được xếp
 		if dangDanhNhauTruocDo == true then
 			rootPart.CFrame = CFrame.new(viTriNha)
 		else
-			viTriNha = rootPart.Position -- Cập nhật vị trí mới nếu vừa được kéo đi
+			viTriNha = rootPart.Position
 		end
-
 		dangDanhNhauTruocDo = dangDanhNhauHienTai
 		continue 
 	end
 	dangDanhNhauTruocDo = dangDanhNhauHienTai
 
-	-- 2. GIAI ĐOẠN CHIẾN ĐẤU
+	-- [[ CHẾ ĐỘ CHIẾN ĐẤU ]]
 	local daRaTran = npc:GetAttribute("DaRaTran")
 
 	if daRaTran == true then
-		-- A. Tìm kẻ địch gần nhất
+		-- A. Tìm địch gần nhất
 		local mucTieu = nil
 		local minDst = math.huge
 		for _, v in pairs(workspace:GetChildren()) do
@@ -131,7 +174,7 @@ while not daChet do
 			-- Xoay mặt về phía địch
 			local huongNhin = Vector3.new(mucTieu.Position.X, rootPart.Position.Y, mucTieu.Position.Z)
 			rootPart.CFrame = rootPart.CFrame:Lerp(CFrame.lookAt(rootPart.Position, huongNhin), 0.2)
-
+			
 			local dist = (rootPart.Position - mucTieu.Position).Magnitude
 			local tamDanh = math.max(statsTamDanh.Value, KICH_THUOC_O - 1)
 
@@ -139,38 +182,55 @@ while not daChet do
 				-- B. TẤN CÔNG (Đứng lại và đánh)
 				humanoid.WalkSpeed = 0 
 				DonDepSachSe()
-
 				attackTrack:Play()
 				task.wait(0.3) 
-
 				local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
-				if eHum and eHum.Health > 0 then
-					eHum:TakeDamage(statsSatThuong.Value)
-				end
+				if eHum and eHum.Health > 0 then eHum:TakeDamage(statsSatThuong.Value) end
 				task.wait(math.max(0.1, (1 / statsTocDoDanh.Value) - 0.3))
 			else
-				-- C. DI CHUYỂN (Grid System)
+				-- C. DI CHUYỂN THÔNG MINH (Smart Pathfinding)
 				humanoid.WalkSpeed = statsTocDoDiChuyen.Value
-
-				local tamO_Dich = LayTamO(mucTieu.Position)
+				
+				-- BƯỚC 1: Thay vì lao vào địch, hãy tìm ô trống xung quanh địch
+				local viTriDichDen = TimViTriTanCong(mucTieu)
+				
+				local tamO_Dich = LayTamO(viTriDichDen)
 				local tamO_Minh = LayTamO(rootPart.Position)
-
-				-- Tính ô tiếp theo
-				local oTiepTheo = tamO_Minh
+				
+				-- BƯỚC 2: Tính toán đường đi theo lưới
 				local diffX = tamO_Dich.X - tamO_Minh.X
 				local diffZ = tamO_Dich.Z - tamO_Minh.Z
+				
+				local oTiepTheo = tamO_Minh
+				local huongDi = nil
 
-				if math.abs(diffX) >= KICH_THUOC_O then
+				-- Ưu tiên đi trục xa hơn trước (Ví dụ X xa hơn Z thì đi X trước)
+				if math.abs(diffX) >= math.abs(diffZ) and math.abs(diffX) >= KICH_THUOC_O then
 					oTiepTheo = tamO_Minh + Vector3.new(math.sign(diffX) * KICH_THUOC_O, 0, 0)
+					huongDi = "X"
 				elseif math.abs(diffZ) >= KICH_THUOC_O then
 					oTiepTheo = tamO_Minh + Vector3.new(0, 0, math.sign(diffZ) * KICH_THUOC_O)
+					huongDi = "Z"
 				end
 
-				-- Kiểm tra đường đi
-				local cucGach = KiemTraVaDatCho(oTiepTheo)
-				if cucGach then
+				-- BƯỚC 3: Kiểm tra xem ô định đi có bị kẹt không
+				-- Nếu ô định đi (Ví dụ X) bị kẹt, thử lách sang chiều kia (Z)
+				if not KiemTraOTrong(oTiepTheo) then
+					if huongDi == "X" and math.abs(diffZ) >= KICH_THUOC_O then
+						-- X bị chặn -> Thử đi Z
+						oTiepTheo = tamO_Minh + Vector3.new(0, 0, math.sign(diffZ) * KICH_THUOC_O)
+					elseif huongDi == "Z" and math.abs(diffX) >= KICH_THUOC_O then
+						-- Z bị chặn -> Thử đi X
+						oTiepTheo = tamO_Minh + Vector3.new(math.sign(diffX) * KICH_THUOC_O, 0, 0)
+					end
+				end
+
+				-- BƯỚC 4: Chốt đơn và di chuyển
+				if KiemTraOTrong(oTiepTheo) then
+					local cucGach = DatChoVaDiChuyen(oTiepTheo)
 					humanoid:MoveTo(oTiepTheo)
-					-- Chờ đến nơi (có timeout để tránh kẹt)
+					
+					-- Time out để không bị kẹt mãi
 					local timeout = 0
 					while (rootPart.Position - oTiepTheo).Magnitude > 1 and timeout < 10 do
 						task.wait(0.05)
@@ -178,16 +238,16 @@ while not daChet do
 					end
 					if cucGach then cucGach:Destroy() end
 				else
-					humanoid:MoveTo(rootPart.Position) -- Kẹt thì đứng yên chút
+					-- Bị vây kín tứ phía -> Đứng chờ thời cơ
+					humanoid:MoveTo(rootPart.Position)
 					task.wait(0.1)
 				end
 			end
 		else
-			humanoid:MoveTo(rootPart.Position) -- Không có địch
+			humanoid:MoveTo(rootPart.Position) -- Không thấy địch
 		end
 	else
-		-- D. Ở HÀNG CHỜ (Trong khi mọi người đang đánh nhau)
 		humanoid.WalkSpeed = 0
-		rootPart.Anchored = true
+		rootPart.Anchored = true -- Ở hàng chờ
 	end
 end
