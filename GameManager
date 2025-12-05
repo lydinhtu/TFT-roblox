@@ -1,0 +1,110 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+
+local bienDangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
+local suKienBatDau = ReplicatedStorage:WaitForChild("SuKienBatDau")
+
+-- Lấy mẫu
+local quaiVatMau = ServerStorage:WaitForChild("QuaiVat")
+local viTriXuatHien = Vector3.new(0, 5, -20) 
+
+local waveHienTai = 1
+
+local function SinhQuaiVat()
+	print("♻️ Đang chuẩn bị Đợt " .. waveHienTai)
+	for _, v in pairs(workspace:GetChildren()) do
+		if v.Name == "QuaiVat" then v:Destroy() end
+	end
+
+	task.wait(1)
+
+	local quaiMoi = quaiVatMau:Clone()
+	quaiMoi.Parent = workspace
+	if quaiMoi:FindFirstChild("HumanoidRootPart") then
+		quaiMoi.HumanoidRootPart.CFrame = CFrame.new(viTriXuatHien)
+	end
+
+	quaiMoi.Humanoid.MaxHealth = quaiMoi.Humanoid.MaxHealth + (waveHienTai * 50)
+	quaiMoi.Humanoid.Health = quaiMoi.Humanoid.MaxHealth
+
+	for _, part in pairs(quaiMoi:GetChildren()) do
+		if part:IsA("BasePart") then
+			part.Color = Color3.fromHSV((waveHienTai * 0.15) % 1, 1, 1)
+		end
+	end
+end
+
+suKienBatDau.OnServerEvent:Connect(function()
+	if bienDangDanhNhau.Value == true then return end 
+
+	print("🔔 BẮT ĐẦU ĐỢT " .. waveHienTai)
+	bienDangDanhNhau.Value = true 
+
+	task.spawn(function()
+		while bienDangDanhNhau.Value == true do
+			task.wait(1) 
+
+			local soLinhTa = 0
+			local soQuaiVat = 0
+
+			-- Quét toàn bộ map
+			for _, v in pairs(workspace:GetChildren()) do
+				-- 1. Bỏ qua nếu là người chơi thật
+				if Players:GetPlayerFromCharacter(v) then 
+					continue 
+				end
+
+				-- 2. Chỉ kiểm tra nếu còn sống
+				if v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+					local hum = v.Humanoid
+
+					-- 3. [QUAN TRỌNG] Kiểm tra kỹ xem có Stats không rồi mới đọc
+					local stats = hum:FindFirstChild("Stats")
+					if stats then
+						local teamVal = stats:FindFirstChild("Team")
+						if teamVal then
+							-- Đếm phe
+							if teamVal.Value == "Ally" then 
+								soLinhTa = soLinhTa + 1
+							elseif teamVal.Value == "Enemy" then 
+								soQuaiVat = soQuaiVat + 1
+							end
+						end
+					end
+				end
+			end
+
+			-- In ra để bạn kiểm tra xem nó đang đếm được gì (Bật Output lên xem)
+			-- print("Đang đếm: Ta=" .. soLinhTa .. " | Địch=" .. soQuaiVat)
+
+			-- XỬ LÝ KẾT QUẢ
+			if soQuaiVat == 0 then
+				print("🎉 ĐỊCH ĐÃ CHẾT HẾT! THẮNG ĐỢT " .. waveHienTai)
+				bienDangDanhNhau.Value = false 
+
+				-- Thưởng tiền
+				for _, p in pairs(Players:GetPlayers()) do
+					if p:FindFirstChild("leaderstats") then
+						p.leaderstats.Gold.Value = p.leaderstats.Gold.Value + (20 + waveHienTai*5)
+					end
+				end
+
+				waveHienTai = waveHienTai + 1  
+				task.wait(2)
+				SinhQuaiVat() 
+				break
+
+			elseif soLinhTa == 0 then
+				print("💀 QUÂN TA CHẾT HẾT! THUA CUỘC.")
+				bienDangDanhNhau.Value = false
+				task.wait(2)
+				SinhQuaiVat() 
+				break
+			end
+		end
+	end)
+end)
+
+SinhQuaiVat()
