@@ -1,0 +1,141 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local funcMuaLinh = ReplicatedStorage:WaitForChild("ChucNangMuaLinh")
+local player = Players.LocalPlayer
+
+-- === CẤU HÌNH SHOP ===
+local DANH_SACH_POOL = {"LinhTa", "LinhTa2"} -- Danh sách các tướng có thể xuất hiện
+local GIA_REROLL = 2 -- Phí đổi lại (Reroll)
+
+-- === 1. TẠO GIAO DIỆN (GUI) TỰ ĐỘNG ===
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ShopUI"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Khung chứa Shop (Nằm ở dưới cùng)
+local shopFrame = Instance.new("Frame")
+shopFrame.Name = "ShopFrame"
+shopFrame.Size = UDim2.new(0.6, 0, 0.15, 0) -- Rộng 60% màn hình
+shopFrame.Position = UDim2.new(0.2, 0, 0.85, 0) -- Nằm ở dưới
+shopFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+shopFrame.BorderSizePixel = 2
+shopFrame.BorderColor3 = Color3.fromRGB(255, 215, 0) -- Viền vàng
+shopFrame.Parent = screenGui
+
+-- Tiêu đề Shop
+local title = Instance.new("TextLabel")
+title.Text = "CỬA HÀNG"
+title.Size = UDim2.new(1, 0, 0.2, 0)
+title.Position = UDim2.new(0, 0, -0.2, 0)
+title.BackgroundTransparency = 1
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.FredokaOne
+title.TextSize = 20
+title.Parent = shopFrame
+
+-- Nút Reroll (Đổi lại)
+local btnReroll = Instance.new("TextButton")
+btnReroll.Name = "RerollBtn"
+btnReroll.Text = "Đổi Lại (" .. GIA_REROLL .. "G)"
+btnReroll.Size = UDim2.new(0.15, 0, 0.8, 0)
+btnReroll.Position = UDim2.new(0.02, 0, 0.1, 0)
+btnReroll.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+btnReroll.TextColor3 = Color3.new(1, 1, 1)
+btnReroll.Font = Enum.Font.SourceSansBold
+btnReroll.TextSize = 18
+btnReroll.Parent = shopFrame
+local uiCorner = Instance.new("UICorner", btnReroll)
+
+-- Khu vực chứa 5 thẻ bài
+local container = Instance.new("Frame")
+container.Size = UDim2.new(0.8, 0, 1, 0)
+container.Position = UDim2.new(0.2, 0, 0, 0)
+container.BackgroundTransparency = 1
+container.Parent = shopFrame
+
+local gridLayout = Instance.new("UIGridLayout")
+gridLayout.CellSize = UDim2.new(0.18, 0, 0.9, 0) -- Kích thước mỗi thẻ
+gridLayout.CellPadding = UDim2.new(0.02, 0, 0, 0)
+gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+gridLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+gridLayout.Parent = container
+
+-- === 2. HÀM TẠO THẺ BÀI ===
+local function TaoTheBai(tenUnit)
+	local card = Instance.new("TextButton")
+	card.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+	card.Text = ""
+	card.AutoButtonColor = true
+	card.Parent = container
+
+	-- Trang trí thẻ
+	local uiStroke = Instance.new("UIStroke")
+	uiStroke.Thickness = 2
+	uiStroke.Color = Color3.fromRGB(100, 100, 100)
+	uiStroke.Parent = card
+
+	-- Tên tướng
+	local lblName = Instance.new("TextLabel")
+	lblName.Text = tenUnit
+	lblName.Size = UDim2.new(1, 0, 0.3, 0)
+	lblName.BackgroundTransparency = 1
+	lblName.TextColor3 = Color3.new(1, 1, 1)
+	lblName.Font = Enum.Font.SourceSansBold
+	lblName.TextSize = 16
+	lblName.Parent = card
+
+	-- Giá tiền (Giả sử: LinhTa=10, LinhTa2=20)
+	local gia = 10
+	if tenUnit == "LinhTa2" then gia = 20 end
+
+	local lblPrice = Instance.new("TextLabel")
+	lblPrice.Text = gia .. " Vàng"
+	lblPrice.Size = UDim2.new(1, 0, 0.3, 0)
+	lblPrice.Position = UDim2.new(0, 0, 0.7, 0)
+	lblPrice.BackgroundTransparency = 1
+	lblPrice.TextColor3 = Color3.fromRGB(255, 215, 0)
+	lblPrice.Font = Enum.Font.SourceSansBold
+	lblPrice.Parent = card
+
+	-- Màu sắc phân biệt (LinhTa=Cam, LinhTa2=Xanh)
+	if tenUnit == "LinhTa" then uiStroke.Color = Color3.fromRGB(255, 170, 0) end
+	if tenUnit == "LinhTa2" then uiStroke.Color = Color3.fromRGB(0, 170, 255) end
+
+	-- SỰ KIỆN KHI BẤM MUA
+	card.MouseButton1Click:Connect(function()
+		-- Gửi yêu cầu mua đúng con tướng này
+		local ketQua = funcMuaLinh:InvokeServer(tenUnit)
+
+		if ketQua == "ThanhCong" then
+			card:Destroy() -- Mua xong thì mất thẻ
+		elseif ketQua == "HetTien" then
+			lblPrice.TextColor3 = Color3.fromRGB(255, 0, 0)
+			lblPrice.Text = "Thiếu Tiền!"
+			task.wait(1)
+			lblPrice.Text = gia .. " Vàng"
+			lblPrice.TextColor3 = Color3.fromRGB(255, 215, 0)
+		end
+	end)
+end
+
+-- === 3. HÀM LÀM MỚI CỬA HÀNG (REROLL) ===
+local function RerollShop()
+	-- Xóa hết thẻ cũ
+	for _, v in pairs(container:GetChildren()) do
+		if v:IsA("TextButton") then v:Destroy() end
+	end
+
+	-- Tạo 5 thẻ mới ngẫu nhiên
+	for i = 1, 5 do
+		local randomUnit = DANH_SACH_POOL[math.random(1, #DANH_SACH_POOL)]
+		TaoTheBai(randomUnit)
+	end
+end
+
+-- Sự kiện nút Reroll
+btnReroll.MouseButton1Click:Connect(function()
+	RerollShop()
+end)
+
+-- Tạo shop lần đầu khi vào game
+RerollShop()
