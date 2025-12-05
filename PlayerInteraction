@@ -1,0 +1,19 @@
+local RunService = game:GetService("RunService")
+local camera = workspace.CurrentCamera
+
+-- CẤU HÌNH GÓC MÁY (Bạn chỉnh số ở đây để vừa mắt)
+local viTriTamSan = Vector3.new(0, 0, 0) -- Tâm của sàn đấu
+local doCao = 45-- Độ cao của camera (Càng lớn nhìn càng xa)
+local doLui = 40-- Độ lùi về phía sau (Để tạo góc nghiêng)
+
+-- Khóa Camera thành chế độ Script (Để người chơi không xoay lung tung được)
+camera.CameraType = Enum.CameraType.Scriptable
+
+-- Hàm cập nhật camera liên tục
+RunService.RenderStepped:Connect(function()
+	-- Vị trí đặt máy quay: Ở trên cao (Y) và lùi lại một chút (Z)
+	local viTriMayQuay = Vector3.new(viTriTamSan.X, doCao, viTriTamSan.Z + doLui)
+
+	-- Lệnh LookAt: Đặt máy ở 'viTriMayQuay' và bắt nó nhìn chằm chằm vào 'viTriTamSan'
+	camera.CFrame = CFrame.lookAt(viTriMayQuay, viTriTamSan)
+end)
