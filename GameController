@@ -1,0 +1,9 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local remote = ReplicatedStorage:WaitForChild("SuKienBatDau")
+local bienDangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
+
+-- Khi nhận được tín hiệu từ nút bấm
+remote.OnServerEvent:Connect(function(player)
+	print("🔔 Trận đấu bắt đầu!")
+	bienDangDanhNhau.Value = true -- Bật công tắc -> Lính sẽ bắt đầu chạy
+end)
