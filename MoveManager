@@ -1,0 +1,49 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SuKienDiChuyen = ReplicatedStorage:WaitForChild("SuKienDiChuyen")
+local DangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
+
+-- CẤU HÌNH
+local KICH_THUOC_O = 6 
+
+-- Hàm tính toán tâm ô vuông
+local function LayTamO(position, yPos)
+	local nuaO = KICH_THUOC_O / 2
+	local x = (math.floor(position.X / KICH_THUOC_O) * KICH_THUOC_O) + nuaO
+	local z = (math.floor(position.Z / KICH_THUOC_O) * KICH_THUOC_O) + nuaO
+	return Vector3.new(x, yPos, z)
+end
+
+-- LẮNG NGHE YÊU CẦU DI CHUYỂN TỪ NGƯỜI CHƠI
+SuKienDiChuyen.OnServerEvent:Connect(function(player, unit, position)
+	print("📩 Server nhận lệnh dời quân từ: " .. player.Name)
+
+	-- 1. Kiểm tra: Nếu đang đánh nhau thì CẤM di chuyển
+	if DangDanhNhau.Value == true then 
+		warn("⛔ Server từ chối: Đang trong trận chiến!")
+		return 
+	end
+
+	-- 2. Kiểm tra con lính có hợp lệ không
+	if not unit or not unit:FindFirstChild("HumanoidRootPart") then return end
+
+	local rootPart = unit.HumanoidRootPart
+	local humanoid = unit:FindFirstChild("Humanoid")
+
+	-- 3. Tính toán vị trí mới
+	-- Cộng thêm 3 đơn vị chiều cao (Y) để thả nó rơi xuống sàn, tránh bị kẹt nửa người
+	local viTriMoi = LayTamO(position, rootPart.Position.Y + 3)
+
+	-- 4. THỰC HIỆN DI CHUYỂN
+	-- [Quan Trọng] Phải nhổ neo (Anchored = false) trước khi di chuyển
+	rootPart.Anchored = false
+
+	-- Dịch chuyển tức thời tới ô mới
+	rootPart.CFrame = CFrame.new(viTriMoi) * rootPart.CFrame.Rotation
+
+	-- Reset đường đi của Humanoid để nó đứng yên tại chỗ mới
+	if humanoid then
+		humanoid:MoveTo(rootPart.Position)
+	end
+
+	print("✅ Đã dịch chuyển " .. unit.Name .. " thành công!")
+end)
