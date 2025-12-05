@@ -73,28 +73,7 @@ local function DiVaoTamO_GanNhat(npc, tocDo)
 	end
 end
 
-local function BanDan(npc, mucTieu, satThuong)
-	local rootPart = npc.HumanoidRootPart
-	local dan = Instance.new("Part")
-	dan.Name = "Dan"
-	dan.Shape = Enum.PartType.Ball
-	dan.Size = Vector3.new(1, 1, 1)
-	dan.Material = Enum.Material.Neon
-	dan.Color = Color3.fromRGB(255, 255, 0)
-	dan.CanCollide = false
-	dan.Anchored = true
-	dan.Position = rootPart.Position + Vector3.new(0, 1, 0)
-	dan.Parent = workspace
-
-	local tweenInfo = TweenInfo.new((mucTieu.Position - rootPart.Position).Magnitude / 40, Enum.EasingStyle.Linear)
-	local tween = TweenService:Create(dan, tweenInfo, {Position = mucTieu.Position})
-	tween:Play()
-	tween.Completed:Connect(function()
-		dan:Destroy()
-		local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
-		if eHum and eHum.Health > 0 then eHum:TakeDamage(satThuong) end
-	end)
-end
+-- (Lưu ý: Hàm BanDan cũ ở đây đã bị xóa vì kỹ năng sẽ được định nghĩa ở script con)
 
 -- === HÀM CHÍNH ĐỂ KÍCH HOẠT AI CHO 1 CON LÍNH ===
 function UnitAI.KhoiTao(npc, config)
@@ -178,18 +157,20 @@ function UnitAI.KhoiTao(npc, config)
 						attackTrack:Play()
 						task.wait(0.3)
 
-						-- Tự động chọn cách đánh dựa trên config
-						if config.IsRanged then
-							BanDan(npc, mucTieu, statsSatThuong.Value)
+						-- [[ ĐÃ SỬA Ở ĐÂY: Dùng hàm kỹ năng được truyền vào ]] 
+						if config.KyNangTanCong then
+							-- Nếu script con có gửi kèm hàm tấn công (ví dụ bắn cung) -> Chạy hàm đó
+							config.KyNangTanCong(npc, mucTieu, statsSatThuong.Value)
 						else
-							-- Đánh cận chiến
+							-- Nếu không có -> Đánh thường (Gây damage trực tiếp)
 							local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
 							if eHum then eHum:TakeDamage(statsSatThuong.Value) end
 						end
+						-- [[ KẾT THÚC SỬA ]]
 
 						task.wait(math.max(0.1, (1 / statsTocDoDanh.Value) - 0.3))
 
-						-- B. DI CHUYỂN (Dùng thuật toán chấm điểm ô vuông)
+						-- B. DI CHUYỂN
 					else
 						humanoid.WalkSpeed = statsTocDoDiChuyen.Value
 						local tamO_HienTai = LayTamO(rootPart.Position, rootPart.Position.Y)
