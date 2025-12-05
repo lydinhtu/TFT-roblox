@@ -1,0 +1,16 @@
+local Players = game:GetService("Players")
+
+Players.PlayerAdded:Connect(function(player)
+	-- 1. Tạo thư mục leaderstats (Phải viết thường toàn bộ!)
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats" 
+	leaderstats.Parent = player
+
+	-- 2. Tạo tiền Gold
+	local gold = Instance.new("IntValue")
+	gold.Name = "Gold"
+	gold.Value = 50 -- Tiền khởi điểm
+	gold.Parent = leaderstats
+
+	print("✅ Đã tạo ví tiền cho " .. player.Name)
+end)
