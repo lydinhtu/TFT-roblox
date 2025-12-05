@@ -1,0 +1,40 @@
+-- CẤU HÌNH BÀN CỜ
+local kichThuocO = 6       -- Mỗi ô rộng 6 mét (Tương ứng với kích thước nhân vật)
+local soHang = 8           -- Bàn cờ 8 hàng
+local soCot = 8            -- Bàn cờ 8 cột
+local doCaoSan = 0         -- Độ cao mặt đất
+
+-- Tạo thư mục chứa các ô
+local boardFolder = Instance.new("Folder")
+boardFolder.Name = "BanCo"
+boardFolder.Parent = workspace
+
+-- HÀM TẠO Ô
+local function TaoBanCo()
+	-- Tính toán để đặt bàn cờ ngay giữa toạ độ 0,0
+	local offset_X = (soCot * kichThuocO) / 2 - (kichThuocO / 2)
+	local offset_Z = (soHang * kichThuocO) / 2 - (kichThuocO / 2)
+
+	for x = 1, soCot do
+		for z = 1, soHang do
+			local oCo = Instance.new("Part")
+			oCo.Name = "Tile_" .. x .. "_" .. z
+			oCo.Size = Vector3.new(kichThuocO, 1, kichThuocO)
+			oCo.Anchored = true
+
+			-- Xếp vị trí theo dạng lưới
+			oCo.Position = Vector3.new((x * kichThuocO) - offset_X - kichThuocO, doCaoSan, (z * kichThuocO) - offset_Z - kichThuocO)
+
+			-- Tô màu kiểu bàn cờ (Sole)
+			if (x + z) % 2 == 0 then
+				oCo.Color = Color3.fromRGB(90, 90, 90) -- Ô màu tối
+			else
+				oCo.Color = Color3.fromRGB(150, 150, 150) -- Ô màu sáng
+			end
+
+			oCo.Parent = boardFolder
+		end
+	end
+end
+
+TaoBanCo()
