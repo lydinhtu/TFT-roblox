@@ -23,7 +23,7 @@ local GemConfig = {
 
 	-- === NGỌC HỖ TRỢ (SUPPORT) ===
 	["CuongHoaSatThuong"] = {
-		Name = "Đa Sắc Ngọc",
+		Name = "Đa Sắc Ngọc(SP)",
 		Type = "Support", -- Ngọc bổ trợ
 		Icon = "rbxassetid://123456789",
 		Color = Color3.fromRGB(255, 0, 0),
@@ -31,7 +31,7 @@ local GemConfig = {
 		BuffDamage = 0.5 -- +50% Damage
 	},
 	["GiamHoiChieu"] = {
-		Name = "Ngọc Thời Gian",
+		Name = "Ngọc Thời Gian(SP)",
 		Type = "Support",
 		Icon = "rbxassetid://123456789",
 		Color = Color3.fromRGB(255, 255, 0),
