@@ -1,91 +1,122 @@
--- File: ServerScriptService/GemSystem
+-- File: StarterGui/GemInventoryUI
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerStorage = game:GetService("ServerStorage")
+local GemConfig = require(ReplicatedStorage:WaitForChild("GemConfig"))
+local remoteGemDrop = ReplicatedStorage:WaitForChild("SuKienNhatGem")
+local Mouse = Players.LocalPlayer:GetMouse()
 
--- Kiểm tra Config
-local gemConfigModule = ReplicatedStorage:FindFirstChild("GemConfig")
-if not gemConfigModule then return end
-local GemConfig = require(gemConfigModule)
+-- Tạo RemoteEvent (Nếu chưa có)
+local remoteEquip = ReplicatedStorage:WaitForChild("SuKienTrangBiGem", 10) 
 
--- 1. TẠO CÁC EVENT
-local remoteGemDrop = ReplicatedStorage:FindFirstChild("SuKienNhatGem") or Instance.new("RemoteEvent")
-remoteGemDrop.Name = "SuKienNhatGem"
-remoteGemDrop.Parent = ReplicatedStorage
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
-local remoteEquip = ReplicatedStorage:FindFirstChild("SuKienTrangBiGem") or Instance.new("RemoteEvent")
-remoteEquip.Name = "SuKienTrangBiGem"
-remoteEquip.Parent = ReplicatedStorage
+-- 1. TẠO GIAO DIỆN
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "GemUI"
+screenGui.Parent = playerGui
 
-local bindable = ServerStorage:FindFirstChild("EnemyDiedEvent") or Instance.new("BindableEvent")
-bindable.Name = "EnemyDiedEvent"
-bindable.Parent = ServerStorage
+local frame = Instance.new("ScrollingFrame")
+frame.Name = "InventoryFrame"
+frame.Size = UDim2.new(0.15, 0, 0.4, 0)
+frame.Position = UDim2.new(0, 10, 0.3, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+frame.BackgroundTransparency = 0.5
+frame.BorderSizePixel = 2
+frame.BorderColor3 = Color3.fromRGB(255, 215, 0)
+frame.Parent = screenGui
 
-local DROP_CHANCE = 0.5 
+local layout = Instance.new("UIGridLayout")
+layout.CellSize = UDim2.new(0.45, 0, 0.2, 0)
+layout.CellPadding = UDim2.new(0.03, 0, 0.02, 0)
+layout.Parent = frame
 
--- 2. XỬ LÝ RỚT ĐỒ
-bindable.Event:Connect(function(player)
-	if math.random() <= DROP_CHANCE then
-		local list = {}
-		for id, _ in pairs(GemConfig) do table.insert(list, id) end
+-- BIẾN LƯU TRẠNG THÁI
+local gemDangChon = nil 
+local lastButton = nil -- Nút đang được chọn (để xóa sau này)
 
-		if #list > 0 then
-			local gemID = list[math.random(1, #list)]
-			remoteGemDrop:FireClient(player, gemID)
+-- 2. HÀM THÊM GEM
+local function ThemGemVaoTui(gemID)
+	local info = GemConfig[gemID]
+	if not info then return end
+
+	local itemBtn = Instance.new("TextButton")
+	itemBtn.Name = gemID -- Đặt tên nút là ID ngọc để dễ tìm
+	itemBtn.BackgroundColor3 = info.Color
+	itemBtn.Text = "" 
+	itemBtn.Parent = frame
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.2, 0)
+	corner.Parent = itemBtn
+
+	local lblName = Instance.new("TextLabel")
+	lblName.Text = info.Name
+	lblName.Size = UDim2.new(1,0,1,0)
+	lblName.BackgroundTransparency = 1
+	lblName.Font = Enum.Font.SourceSansBold
+	lblName.TextColor3 = Color3.new(1,1,1)
+	lblName.TextWrapped = true
+	lblName.Parent = itemBtn
+
+	-- [SỰ KIỆN CLICK CHỌN NGỌC]
+	itemBtn.MouseButton1Click:Connect(function()
+		if gemDangChon == gemID then
+			-- Bỏ chọn
+			gemDangChon = nil
+			itemBtn.BorderSizePixel = 0
+			lastButton = nil
+			print("Đã bỏ chọn ngọc")
+		else
+			-- Chọn mới
+			if lastButton then lastButton.BorderSizePixel = 0 end -- Reset nút cũ
+			gemDangChon = gemID
+			lastButton = itemBtn -- Lưu lại nút này để tí nữa Server bảo xóa thì xóa
+			itemBtn.BorderSizePixel = 4
+			itemBtn.BorderColor3 = Color3.new(1, 1, 1)
+			print("Đang cầm ngọc: " .. info.Name)
+		end
+	end)
+end
+
+-- 3. CLICK VÀO LÍNH -> GỬI YÊU CẦU (KHÔNG XÓA NÚT Ở ĐÂY)
+Mouse.Button1Down:Connect(function()
+	if gemDangChon and Mouse.Target then
+		local model = Mouse.Target:FindFirstAncestorOfClass("Model")
+
+		if model and model:FindFirstChild("Humanoid") then
+			local stats = model.Humanoid:FindFirstChild("Stats")
+			if stats and stats:FindFirstChild("Team") and stats.Team.Value == "Ally" then
+				print("🛠️ Gửi yêu cầu lắp ngọc...")
+				if remoteEquip then
+					remoteEquip:FireServer(gemDangChon, model)
+				end
+				-- [QUAN TRỌNG] Không xóa nút ở đây nữa!
+				-- Chờ Server trả lời mới xóa.
+			end
 		end
 	end
 end)
 
--- 3. XỬ LÝ LẮP TRANG BỊ
-remoteEquip.OnServerEvent:Connect(function(player, gemID, unitModel)
-	if not unitModel or not unitModel:FindFirstChild("Humanoid") then return end
+-- 4. NHẬN NGỌC MỚI TỪ SERVER
+remoteGemDrop.OnClientEvent:Connect(function(gemID)
+	ThemGemVaoTui(gemID)
+end)
 
-	local gemInfo = GemConfig[gemID]
-	if not gemInfo then return end
+-- 5. [MỚI] NHẬN PHẢN HỒI LẮP THÀNH CÔNG -> XÓA NÚT
+remoteEquip.OnClientEvent:Connect(function(gemID, isSuccess)
+	if isSuccess then
+		print("🎉 Lắp thành công! Xóa ngọc khỏi túi.")
 
-	local tenUnitGoc = unitModel:GetAttribute("TenUnit")
-	local success = false -- Biến đánh dấu thành công
-
-	-- A. KIỂM TRA ĐIỀU KIỆN
-	if gemInfo.AllowedUnits then
-		local duocPhep = false
-		for _, u in pairs(gemInfo.AllowedUnits) do
-			if u == tenUnitGoc then duocPhep = true break end
-		end
-
-		if not duocPhep then
-			warn("⛔ Ngọc không phù hợp!")
-			return -- Không làm gì cả (Client sẽ không nhận được tin success)
-		end
-	end
-
-	-- B. XỬ LÝ LẮP
-	if gemInfo.Type == "Active" then
-		unitModel:SetAttribute("GemMain", gemID)
-		print("✅ Đã lắp Skill Chính")
-		success = true
-
-	elseif gemInfo.Type == "Support" then
-		if unitModel:GetAttribute("GemMain") then
-			unitModel:SetAttribute("GemSupport", gemID)
-			print("✅ Đã lắp Hỗ Trợ")
-			success = true
+		-- Xóa cái nút đang chọn (lastButton)
+		if lastButton and lastButton.Name == gemID then
+			lastButton:Destroy()
+			lastButton = nil
+			gemDangChon = nil
 		else
-			warn("⛔ Cần có Ngọc Kỹ Năng trước!")
-			return
+			-- Nếu lỡ tay chọn cái khác rồi thì tìm trong túi để xóa
+			local nutCanXoa = frame:FindFirstChild(gemID)
+			if nutCanXoa then nutCanXoa:Destroy() end
 		end
-	end
-
-	-- C. [QUAN TRỌNG] NẾU THÀNH CÔNG -> BÁO LẠI CHO CLIENT XÓA NGỌC
-	if success then
-		-- Gửi tin nhắn về cho đúng người chơi đó, kèm theo ID ngọc đã lắp
-		-- Chúng ta dùng lại RemoteEvent này, nhưng chiều ngược lại (Server -> Client)
-		remoteEquip:FireClient(player, gemID, true) 
-
-		-- Hiệu ứng
-		local highlight = Instance.new("Highlight")
-		highlight.FillColor = Color3.fromRGB(255, 255, 255)
-		highlight.OutlineColor = gemInfo.Color
-		highlight.Parent = unitModel
-		game.Debris:AddItem(highlight, 0.5)
 	end
 end)
