@@ -8,77 +8,61 @@ local suKienBatDau = ReplicatedStorage:WaitForChild("SuKienBatDau")
 
 -- Lấy mẫu
 local quaiVatMau = ServerStorage:WaitForChild("QuaiVat")
-local folderBanCo = workspace:WaitForChild("BanCo") -- Folder chứa các ô cờ (Tile_x_z)
+local folderBanCo = workspace:WaitForChild("BanCo")
+
+-- [[ GIẢI PHÁP MỚI: TẠO FOLDER CHỨA QUÁI ]]
+local folderQuaiSong = workspace:FindFirstChild("LivingEnemies") or Instance.new("Folder")
+folderQuaiSong.Name = "LivingEnemies"
+folderQuaiSong.Parent = workspace
 
 local waveHienTai = 1
 
--- === CẤU HÌNH CÁC ĐỢT TẤN CÔNG (WAVES) ===
--- Bạn có thể chỉnh sửa vị trí (Tile_Cột_Hàng) và sức mạnh tại đây
+-- === CẤU HÌNH WAVES ===
 local DATA_WAVES = {
-	[1] = { -- Đợt 1: Dễ
-		ViTri = {"Tile_4_1", "Tile_5_1"}, -- 2 con đứng hàng cuối
-		MauCongThem = 0,
-		MauSac = Color3.fromRGB(200, 200, 200) -- Màu trắng
-	},
-	[2] = { -- Đợt 2: Trung bình
-		ViTri = {"Tile_4_1", "Tile_5_1", "Tile_3_1", "Tile_4_2"}, -- 4 con
-		MauCongThem = 50,
-		MauSac = Color3.fromRGB(255, 170, 0) -- Màu cam
-	},
-	[3] = { -- Đợt 3: Khó (Boss)
-		ViTri = {"Tile_4_1"}, -- 6 con
-		MauCongThem = 1500,
-		MauSac = Color3.fromRGB(255, 0, 0) -- Màu đỏ
-	}
+	[1] = { ViTri = {"Tile_4_1", "Tile_5_1"}, MauCongThem = 0, MauSac = Color3.fromRGB(200, 200, 200) },
+	[2] = { ViTri = {"Tile_4_1", "Tile_5_1", "Tile_3_1", "Tile_4_2"}, MauCongThem = 50, MauSac = Color3.fromRGB(255, 170, 0) },
+	[3] = { ViTri = {"Tile_4_1"}, MauCongThem = 1500, MauSac = Color3.fromRGB(255, 0, 0) }
 }
 
 local function SinhQuaiVat()
-	-- 1. Kiểm tra xem còn data wave không (Nếu hết wave 3 thì quay lại 1 hoặc thông báo thắng)
+	-- Xử lý thắng game
 	if not DATA_WAVES[waveHienTai] then
-		print("🏆 CHÚC MỪNG! BẠN ĐÃ CHIẾN THẮNG TOÀN BỘ GAME!")
-		waveHienTai = 1 -- Reset về wave 1 để chơi lại vô tận
+		print("🏆 WIN GAME! Reset về Wave 1")
+		waveHienTai = 1
 	end
 
 	local data = DATA_WAVES[waveHienTai]
-	print("♻️ Đang chuẩn bị Đợt " .. waveHienTai .. " - Số lượng: " .. #data.ViTri)
+	print("♻️ Chuẩn bị Đợt " .. waveHienTai)
 
-	-- 2. Xóa quái cũ
-	for _, v in pairs(workspace:GetChildren()) do
-		if v.Name:match("QuaiVat") then v:Destroy() end
-	end
+	-- 1. Dọn dẹp sạch sẽ folder quái cũ
+	folderQuaiSong:ClearAllChildren()
+	task.wait(0.5)
 
-	task.wait(1)
-
-	-- 3. Sinh quái theo danh sách vị trí
+	-- 2. Sinh quái mới và bỏ vào Folder
 	for _, tenO in pairs(data.ViTri) do
-		-- Tìm ô cờ trên bản đồ
 		local oCo = folderBanCo:FindFirstChild(tenO)
-
 		if oCo then
 			local quaiMoi = quaiVatMau:Clone()
-			quaiMoi.Parent = workspace
+			-- [QUAN TRỌNG] Bỏ quái vào Folder riêng để dễ quản lý
+			quaiMoi.Parent = folderQuaiSong 
 			quaiMoi.Name = "QuaiVat_Wave" .. waveHienTai
+			quaiMoi:SetAttribute("DaRaTran", true)
 
-			-- Đặt vị trí vào TÂM Ô (Cộng thêm Y=3 để đứng trên mặt đất)
 			if quaiMoi:FindFirstChild("HumanoidRootPart") then
 				quaiMoi.HumanoidRootPart.CFrame = oCo.CFrame + Vector3.new(0, 3, 0)
 			end
 
-			-- Cài đặt chỉ số theo Wave
-			quaiMoi.Humanoid.MaxHealth = quaiMoi.Humanoid.MaxHealth + data.MauCongThem
-			quaiMoi.Humanoid.Health = quaiMoi.Humanoid.MaxHealth
-
-			-- [QUAN TRỌNG] Cấp quyền "Đã Ra Trận" để AI tự chạy
-			quaiMoi:SetAttribute("DaRaTran", true)
-
-			-- Đổi màu để phân biệt độ khó
-			for _, part in pairs(quaiMoi:GetChildren()) do
-				if part:IsA("BasePart") then
-					part.Color = data.MauSac
-				end
+			-- Tăng sức mạnh
+			local hum = quaiMoi:FindFirstChild("Humanoid")
+			if hum then
+				hum.MaxHealth = hum.MaxHealth + data.MauCongThem
+				hum.Health = hum.MaxHealth
 			end
-		else
-			warn("⚠️ Không tìm thấy ô: " .. tenO .. ". Kiểm tra lại tên trong MapGenerator!")
+
+			-- Đổi màu
+			for _, part in pairs(quaiMoi:GetChildren()) do
+				if part:IsA("BasePart") then part.Color = data.MauSac end
+			end
 		end
 	end
 end
@@ -93,42 +77,36 @@ suKienBatDau.OnServerEvent:Connect(function()
 		while bienDangDanhNhau.Value == true do
 			task.wait(1) 
 
-			local soLinhTa = 0
+			-- A. ĐẾM QUÁI (Chỉ cần đếm trong Folder LivingEnemies)
 			local soQuaiVat = 0
+			for _, mob in pairs(folderQuaiSong:GetChildren()) do
+				local hum = mob:FindFirstChild("Humanoid")
+				-- Chỉ đếm con nào còn máu
+				if hum and hum.Health > 0 then
+					soQuaiVat = soQuaiVat + 1
+				end
+			end
 
-			-- Quét toàn bộ map đếm số lượng
+			-- B. ĐẾM LÍNH TA (Vẫn quét workspace vì lính ta do người chơi đặt)
+			local soLinhTa = 0
 			for _, v in pairs(workspace:GetChildren()) do
-				if Players:GetPlayerFromCharacter(v) then continue end
-
 				local hum = v:FindFirstChild("Humanoid")
-				local root = v:FindFirstChild("HumanoidRootPart")
-
-				-- [QUY TẮC ĐẾM CHUẨN]
-				-- 1. Có Humanoid & RootPart
-				-- 2. Máu > 0
-				-- 3. Đứng trên sàn (Y > -10 và Y < 50) - Tránh đếm quái rơi vực hoặc bay lên trời
-				if hum and hum.Health > 0 and root then
-					if root.Position.Y > -10 and root.Position.Y < 50 then
-						local stats = hum:FindFirstChild("Stats")
-						if stats then
-							local teamVal = stats:FindFirstChild("Team")
-							if teamVal then
-								-- Lính ta: Phải chưa "Chết giả" (Attribute DaChet)
-								if teamVal.Value == "Ally" and v:GetAttribute("DaChet") ~= true then 
-									soLinhTa = soLinhTa + 1
-									-- Quái vật: Cứ thấy là đếm
-								elseif teamVal.Value == "Enemy" then 
-									soQuaiVat = soQuaiVat + 1
-								end
-							end
-						end
+				if hum and hum.Health > 0 and v:GetAttribute("DaChet") ~= true then
+					local stats = hum:FindFirstChild("Stats")
+					if stats and stats:FindFirstChild("Team") and stats.Team.Value == "Ally" then
+						soLinhTa = soLinhTa + 1
 					end
 				end
 			end
 
-			-- XỬ LÝ KẾT QUẢ
+			-- [DEBUG] In ra để kiểm tra nếu bị lỗi
+			if soQuaiVat > 0 and soQuaiVat < 3 then
+				print("⚠️ Còn sót " .. soQuaiVat .. " quái chưa chết.")
+			end
+
+			-- C. XỬ LÝ THẮNG / THUA
 			if soQuaiVat == 0 then
-				print("🎉 THẮNG ĐỢT " .. waveHienTai)
+				print("🎉 ĐÃ DIỆT HẾT QUÁI! THẮNG ĐỢT " .. waveHienTai)
 				bienDangDanhNhau.Value = false 
 
 				-- Thưởng tiền
@@ -140,20 +118,20 @@ suKienBatDau.OnServerEvent:Connect(function()
 
 				waveHienTai = waveHienTai + 1  
 				task.wait(2)
-				SinhQuaiVat() -- Sinh wave tiếp theo
+				SinhQuaiVat() -- Gọi đợt tiếp theo
 				break
 
 			elseif soLinhTa == 0 then
-				print("💀 THUA CUỘC.")
+				print("💀 TOÀN BỘ LÍNH TA ĐÃ CHẾT. THUA CUỘC.")
 				bienDangDanhNhau.Value = false
 				task.wait(2)
-				SinhQuaiVat() -- Reset lại wave hiện tại để chơi lại
+				SinhQuaiVat() -- Reset lại
 				break
 			end
 		end
 	end)
 end)
 
--- Sinh quái lần đầu khi server chạy
-task.wait(2) -- Đợi map load xong
+-- Sinh quái lần đầu
+task.wait(2)
 SinhQuaiVat()
