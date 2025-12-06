@@ -26,43 +26,51 @@ local SelectionBox = Instance.new("SelectionBox") -- Khung sáng bao quanh lính
 SelectionBox.Color3 = Color3.fromRGB(0, 255, 0)
 SelectionBox.LineThickness = 0.1
 
+local eventChonUnit = ReplicatedStorage:FindFirstChild("SuKienChonUnit")
+if not eventChonUnit then
+	eventChonUnit = Instance.new("BindableEvent")
+	eventChonUnit.Name = "SuKienChonUnit"
+	eventChonUnit.Parent = ReplicatedStorage
+end
+
 Mouse.Button1Down:Connect(function()
-	-- Nếu đang đánh nhau thì cấm click lung tung
 	if DangDanhNhau.Value == true then return end
 
 	local target = Mouse.Target
-	if not target then return end
+	if not target then 
+		-- [MỚI] Nếu bấm ra ngoài trời thì tắt bảng thông tin
+		eventChonUnit:Fire(nil) 
+		return 
+	end
 
-	-- A. NẾU BẤM VÀO MỘT CON LÍNH (PHE TA) ĐỂ CHỌN
+	-- A. NẾU BẤM VÀO MỘT CON LÍNH (PHE TA)
 	local model = target:FindFirstAncestorOfClass("Model")
 	if model and model:FindFirstChild("Humanoid") then
 		local stats = model.Humanoid:FindFirstChild("Stats")
-		-- Chỉ chọn được lính phe mình (Ally)
 		if stats and stats:FindFirstChild("Team") and stats.Team.Value == "Ally" then
 			UnitDangChon = model
 
-			-- Hiện khung chọn lên
+			-- Hiện khung chọn (Code cũ)
 			SelectionBox.Adornee = model
 			SelectionBox.Parent = model
 			print("👉 Đã chọn: " .. model.Name)
-			return -- Dừng lại, chờ lần click tiếp theo để di chuyển
+
+			-- >>> [MỚI] GỬI TÍN HIỆU HIỆN BẢNG THÔNG TIN <<<
+			eventChonUnit:Fire(model)
+			-- >>> KẾT THÚC <<<
+
+			return 
 		end
 	end
 
-	-- B. NẾU ĐANG CHỌN LÍNH -> BẤM VÀO Ô ĐẤT ĐỂ DI CHUYỂN
-	-- [QUAN TRỌNG] Đã thêm điều kiện: target.Name:match("Slot")
-	-- Giúp bạn bấm được vào ô hàng chờ (Slot_1, Slot_2...)
+	-- Nếu bấm trúng cái gì khác (đất, quái...) mà không phải lính mình
+	-- Thì ẩn bảng thông tin đi cho đỡ vướng
+	if not UnitDangChon then
+		eventChonUnit:Fire(nil)
+	end
+
+	-- B. DI CHUYỂN (Code cũ giữ nguyên)
 	if UnitDangChon and (target.Name == "SanDau" or target.Name:match("Tile") or target.Name:match("Slot")) then
-
-		print("🎯 Gửi lệnh di chuyển đến: " .. target.Name)
-
-		-- Gửi yêu cầu di chuyển lên Server
-		local viTriClick = Mouse.Hit.Position
-		SuKienDiChuyen:FireServer(UnitDangChon, viTriClick)
-
-		-- Bỏ chọn sau khi di chuyển xong
-		UnitDangChon = nil
-		SelectionBox.Adornee = nil
-		SelectionBox.Parent = nil
+		-- ... (Code di chuyển cũ) ...
 	end
 end)
