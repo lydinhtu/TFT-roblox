@@ -2,6 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService") -- [MỚI] Dịch vụ dịch chuyển
 
 local bienDangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
 local suKienBatDau = ReplicatedStorage:WaitForChild("SuKienBatDau")
@@ -16,7 +17,12 @@ folderQuaiSong.Name = "LivingEnemies"
 folderQuaiSong.Parent = workspace
 
 local waveHienTai = 1
-local dangXuLyWave = false -- Biến khóa cục bộ để tránh lỗi spam nút
+local dangXuLyWave = false 
+
+-- ==========================================================
+-- ⚠️ [QUAN TRỌNG] HÃY DÁN ID LOBBY CỦA BẠN VÀO ĐÂY
+-- ==========================================================
+local ID_LOBBY = 111010856804234 -- <--- Thay số 0 bằng ID bạn vừa copy
 
 -- === CẤU HÌNH WAVES ===
 local DATA_WAVES = {
@@ -25,10 +31,35 @@ local DATA_WAVES = {
 	[3] = { ViTri = {"Tile_4_1"}, MauCongThem = 1500, MauSac = Color3.fromRGB(255, 0, 0) }
 }
 
+-- [CHỨC NĂNG MỚI] Dịch chuyển người chơi về Lobby khác
+local function KetThucGame()
+	print("🏆 CHIẾN THẮNG TOÀN BỘ! Đang dịch chuyển về Lobby...")
+
+	-- Reset biến (để tránh lỗi nếu server chưa kịp đóng)
+	bienDangDanhNhau.Value = false
+	dangXuLyWave = false
+
+	-- Dịch chuyển toàn bộ người chơi đang có trong server
+	local danhSachNguoiChoi = Players:GetPlayers()
+
+	-- TeleportService chỉ hoạt động khi bạn CHƠI THẬT (Roblox Player)
+	-- Nó sẽ KHÔNG chạy trong Roblox Studio, nên mình thêm kiểm tra pcall
+	local success, err = pcall(function()
+		if #danhSachNguoiChoi > 0 then
+			TeleportService:TeleportPartyAsync(ID_LOBBY, danhSachNguoiChoi)
+		end
+	end)
+
+	if not success then
+		warn("❌ Lỗi Teleport (Có thể do đang test trong Studio): " .. tostring(err))
+	end
+end
+
 local function SinhQuaiVat()
+	-- Kiểm tra nếu hết Wave trong danh sách -> Thắng game
 	if not DATA_WAVES[waveHienTai] then
-		print("🏆 WIN GAME! Reset về Wave 1")
-		waveHienTai = 1
+		KetThucGame() -- Gọi hàm dịch chuyển
+		return
 	end
 
 	local data = DATA_WAVES[waveHienTai]
@@ -65,7 +96,6 @@ local function SinhQuaiVat()
 end
 
 suKienBatDau.OnServerEvent:Connect(function()
-	-- [FIX XUNG ĐỘT] Dùng biến cục bộ để kiểm soát thay vì phụ thuộc hoàn toàn vào Value
 	if dangXuLyWave == true then return end 
 	dangXuLyWave = true
 
@@ -80,13 +110,12 @@ suKienBatDau.OnServerEvent:Connect(function()
 			local soQuaiVat = 0
 			local danhSachKeCungDau = {} 
 
-			-- === A. KIỂM TRA QUÁI VẬT ===
+			-- A. KIỂM TRA QUÁI VẬT
 			for _, mob in pairs(folderQuaiSong:GetChildren()) do
 				local hum = mob:FindFirstChild("Humanoid")
 				local root = mob:FindFirstChild("HumanoidRootPart")
 
 				if hum and root then
-					-- [MÁY CHÉM: Rơi xuống vực là xóa ngay]
 					if root.Position.Y < -20 then
 						print("🗑️ Xóa quái rơi xuống vực: " .. mob.Name)
 						mob:Destroy() 
@@ -99,7 +128,7 @@ suKienBatDau.OnServerEvent:Connect(function()
 				end
 			end
 
-			-- === B. KIỂM TRA LÍNH TA ===
+			-- B. KIỂM TRA LÍNH TA
 			for _, v in pairs(workspace:GetChildren()) do
 				local hum = v:FindFirstChild("Humanoid")
 				local root = v:FindFirstChild("HumanoidRootPart")
@@ -117,16 +146,16 @@ suKienBatDau.OnServerEvent:Connect(function()
 				end
 			end
 
-			-- [DEBUG]
+			-- Debug
 			if soQuaiVat > 0 and soQuaiVat <= 3 then
 				print("⚠️ Wave chưa hết do còn: " .. table.concat(danhSachKeCungDau, ", "))
 			end
 
-			-- === C. XỬ LÝ KẾT QUẢ ===
+			-- C. XỬ LÝ KẾT QUẢ WAVE
 			if soQuaiVat == 0 then
 				print("🎉 THẮNG ĐỢT " .. waveHienTai)
 				bienDangDanhNhau.Value = false 
-				dangXuLyWave = false -- Mở khóa để bấm nút lần sau
+				dangXuLyWave = false 
 
 				-- Thưởng tiền
 				for _, p in pairs(Players:GetPlayers()) do
@@ -145,7 +174,7 @@ suKienBatDau.OnServerEvent:Connect(function()
 				bienDangDanhNhau.Value = false
 				dangXuLyWave = false
 				task.wait(2)
-				SinhQuaiVat()
+				SinhQuaiVat() -- Reset lại wave hiện tại
 				break
 			end
 		end
