@@ -3,14 +3,13 @@ local UnitAI = {}
 -- === CẤU HÌNH CHUNG ===
 local KICH_THUOC_O = 6 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService") 
 local Players = game:GetService("Players")
 local bienDangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
 
 local folderDatCho = workspace:FindFirstChild("DatCho") or Instance.new("Folder", workspace)
 if folderDatCho.Name ~= "DatCho" then folderDatCho.Name = "DatCho" end
 
--- === CÁC HÀM HỖ TRỢ (PRIVATE) ===
+-- === CÁC HÀM HỖ TRỢ ===
 local function LayTamO(position, yPos)
 	local nuaO = KICH_THUOC_O / 2
 	local x = (math.floor(position.X / KICH_THUOC_O) * KICH_THUOC_O) + nuaO
@@ -19,20 +18,22 @@ local function LayTamO(position, yPos)
 end
 
 local function KiemTraOTrong(viTri, npcIgnore)
+	local posO = Vector3.new(viTri.X, 0, viTri.Z)
 	for _, v in pairs(workspace:GetChildren()) do
-		if v ~= npcIgnore and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-			if Players:GetPlayerFromCharacter(v) then continue end 
-			local root = v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("RootPart")
+		-- Kiểm tra kỹ: Không tính những con đã chết (đang ở dưới lòng đất hoặc có Attribute)
+		if v:IsA("Model") and v ~= npcIgnore and v:GetAttribute("DaChet") ~= true then
+			local root = v:FindFirstChild("HumanoidRootPart")
 			if root then
-				local posVatCan = root.Position * Vector3.new(1, 0, 1)
-				local posO = viTri * Vector3.new(1, 0, 1)
-				if (posVatCan - posO).Magnitude < 2.5 then return false end
+				local posVatCan = Vector3.new(root.Position.X, 0, root.Position.Z)
+				-- Nếu nó ở dưới đất (Y < -10) thì chắc chắn không cản đường -> Bỏ qua
+				if root.Position.Y > -10 and (posVatCan - posO).Magnitude < 2.5 then 
+					return false 
+				end
 			end
 		end
 	end
 	for _, gach in pairs(folderDatCho:GetChildren()) do
-		local posGach = gach.Position * Vector3.new(1, 0, 1)
-		local posO = viTri * Vector3.new(1, 0, 1)
+		local posGach = Vector3.new(gach.Position.X, 0, gach.Position.Z)
 		if (posGach - posO).Magnitude < 1 then return false end
 	end
 	return true 
@@ -57,38 +58,41 @@ local function DonDepSachSe(npc)
 	end
 end
 
-local function DiVaoTamO_GanNhat(npc, tocDo)
+local function DiBoVaoTamO(npc, tocDo)
 	local rootPart = npc.HumanoidRootPart
 	local humanoid = npc.Humanoid
 	local tamO = LayTamO(rootPart.Position, rootPart.Position.Y)
+	local dist = Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z) - Vector3.new(tamO.X, 0, tamO.Z)
 
-	if (rootPart.Position - tamO).Magnitude > 0.5 then
+	if dist.Magnitude > 0.2 then
 		humanoid.WalkSpeed = tocDo
 		humanoid:MoveTo(tamO)
-		local t = 0
-		while (rootPart.Position - tamO).Magnitude > 0.5 and t < 10 do
+		local timeOut = 0
+		while timeOut < 10 do 
 			task.wait(0.05)
-			t = t + 1
+			timeOut = timeOut + 1
+			local distNow = (Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z) - Vector3.new(tamO.X, 0, tamO.Z)).Magnitude
+			if distNow < 0.2 then break end 
 		end
 	end
 end
 
--- (Lưu ý: Hàm BanDan cũ ở đây đã bị xóa vì kỹ năng sẽ được định nghĩa ở script con)
-
--- === HÀM CHÍNH ĐỂ KÍCH HOẠT AI CHO 1 CON LÍNH ===
+-- === HÀM CHÍNH ===
 function UnitAI.KhoiTao(npc, config)
 	local humanoid = npc:WaitForChild("Humanoid")
 	local rootPart = npc:WaitForChild("HumanoidRootPart")
 	local stats = humanoid:WaitForChild("Stats")
 
-	-- Lấy chỉ số
+	if rootPart:CanSetNetworkOwnership() then
+		rootPart:SetNetworkOwner(nil)
+	end
+
 	local statsTamDanh = stats:WaitForChild("TamDanh")
 	local statsSatThuong = stats:WaitForChild("SatThuong")
 	local statsTocDoDanh = stats:WaitForChild("TocDoDanh")
 	local statsTocDoDiChuyen = stats:WaitForChild("TocDoDiChuyen")
 	local myTeam = stats:WaitForChild("Team").Value
 
-	-- Load Animation
 	local animObj = Instance.new("Animation")
 	animObj.AnimationId = config.AnimationID or "rbxassetid://507777826"
 	local attackTrack = humanoid:LoadAnimation(animObj)
@@ -97,117 +101,155 @@ function UnitAI.KhoiTao(npc, config)
 	local viTriNha = rootPart.Position
 	local dangDanhNhauTruocDo = false
 
-	humanoid.Died:Connect(function()
-		daChet = true
-		DonDepSachSe(npc)
-		npc:Destroy()
+	humanoid.HealthChanged:Connect(function(hp)
+		if hp <= 0 and not daChet then
+			if myTeam == "Enemy" then
+				-- Kẻ địch chết thật -> Xóa luôn
+				daChet = true
+				DonDepSachSe(npc)
+				npc:Destroy()
+			else
+				-- [LÍNH TA CHẾT GIẢ]
+				daChet = true
+				npc:SetAttribute("DaChet", true)
+
+				humanoid.Health = 1 
+				humanoid.WalkSpeed = 0
+				if attackTrack then attackTrack:Stop() end
+
+				-- [QUAN TRỌNG NHẤT] Đưa ngay xuống lòng đất (Sâu 100m)
+				-- Vừa khuất mắt, vừa không chặn đường ai
+				rootPart.Anchored = true
+				rootPart.CFrame = CFrame.new(0, -100, 0)
+
+				DonDepSachSe(npc)
+			end
+		end
 	end)
 
-	-- VÒNG LẶP LOGIC
 	task.spawn(function()
-		while not daChet do
-			task.wait(0.05)
-			if not npc.Parent then break end
-
+		while npc.Parent do
+			task.wait(0.05) 
 			local dangDanhNhau = bienDangDanhNhau.Value
 
-			-- 1. CHẾ ĐỘ NGHỈ
+			-- NẾU ĐANG CHẾT
+			if daChet then
+				if not dangDanhNhau then
+					-- [HỒI SINH]
+					daChet = false
+					npc:SetAttribute("DaChet", nil)
+
+					humanoid.Health = humanoid.MaxHealth
+					rootPart.Anchored = false
+
+					-- Teleport từ lòng đất về nhà
+					if dangDanhNhauTruocDo then
+						-- Về vị trí cũ đã lưu
+						rootPart.CFrame = CFrame.new(viTriNha) * rootPart.CFrame.Rotation
+						rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
+					end
+					dangDanhNhauTruocDo = dangDanhNhau
+				end
+				continue 
+			end
+
+			-- LOGIC SỐNG (BÌNH THƯỜNG)
 			if not dangDanhNhau then
 				humanoid.WalkSpeed = 0
 				rootPart.Anchored = false
 				DonDepSachSe(npc)
 				if humanoid.Health < humanoid.MaxHealth then humanoid.Health = humanoid.MaxHealth end
 
-				if dangDanhNhauTruocDo then rootPart.CFrame = CFrame.new(viTriNha)
-				else viTriNha = rootPart.Position end
-
+				if dangDanhNhauTruocDo then 
+					rootPart.CFrame = CFrame.new(viTriNha) * rootPart.CFrame.Rotation
+					rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
+				else 
+					-- Chỉ cập nhật vị trí nhà khi còn đang sống và ở trên mặt đất
+					if rootPart.Position.Y > -10 then
+						viTriNha = rootPart.Position 
+					end
+				end
 				dangDanhNhauTruocDo = dangDanhNhau
 				continue
 			end
 			dangDanhNhauTruocDo = dangDanhNhau
 
-			-- 2. CHẾ ĐỘ CHIẾN ĐẤU
 			if npc:GetAttribute("DaRaTran") then
-				-- Tìm địch
 				local mucTieu = nil
 				local minDst = math.huge
+
 				for _, v in pairs(workspace:GetChildren()) do
-					if v ~= npc and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+					if v:IsA("Model") and v ~= npc and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 and v:GetAttribute("DaChet") ~= true then
 						local eStats = v.Humanoid:FindFirstChild("Stats")
 						if eStats and eStats:FindFirstChild("Team") and eStats.Team.Value ~= myTeam then
 							local dist = (rootPart.Position - v.HumanoidRootPart.Position).Magnitude
-							if dist < minDst then minDst = dist; mucTieu = v.HumanoidRootPart end
+							if dist < minDst then 
+								minDst = dist
+								mucTieu = v.HumanoidRootPart 
+							end
 						end
 					end
 				end
 
 				if mucTieu then
-					-- Quay mặt
-					local lookPos = Vector3.new(mucTieu.Position.X, rootPart.Position.Y, mucTieu.Position.Z)
-					rootPart.CFrame = rootPart.CFrame:Lerp(CFrame.lookAt(rootPart.Position, lookPos), 0.2)
-
-					local dist = (rootPart.Position - mucTieu.Position).Magnitude
 					local tamDanhThucTe = math.max(statsTamDanh.Value, KICH_THUOC_O - 1)
+					local dist = (rootPart.Position - mucTieu.Position).Magnitude
 
-					-- A. TRONG TẦM ĐÁNH
 					if dist <= tamDanhThucTe then
-						DiVaoTamO_GanNhat(npc, statsTocDoDiChuyen.Value)
+						DiBoVaoTamO(npc, statsTocDoDiChuyen.Value)
+						local lookPos = Vector3.new(mucTieu.Position.X, rootPart.Position.Y, mucTieu.Position.Z)
+						rootPart.CFrame = CFrame.lookAt(rootPart.Position, lookPos)
 						humanoid.WalkSpeed = 0
 						DonDepSachSe(npc)
 						attackTrack:Play()
 						task.wait(0.3)
-
-						-- [[ ĐÃ SỬA Ở ĐÂY: Dùng hàm kỹ năng được truyền vào ]] 
 						if config.KyNangTanCong then
-							-- Nếu script con có gửi kèm hàm tấn công (ví dụ bắn cung) -> Chạy hàm đó
 							config.KyNangTanCong(npc, mucTieu, statsSatThuong.Value)
 						else
-							-- Nếu không có -> Đánh thường (Gây damage trực tiếp)
-							local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
-							if eHum then eHum:TakeDamage(statsSatThuong.Value) end
+							if mucTieu.Parent then
+								local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
+								if eHum then eHum:TakeDamage(statsSatThuong.Value) end
+							end
 						end
-						-- [[ KẾT THÚC SỬA ]]
-
 						task.wait(math.max(0.1, (1 / statsTocDoDanh.Value) - 0.3))
-
-						-- B. DI CHUYỂN
 					else
 						humanoid.WalkSpeed = statsTocDoDiChuyen.Value
 						local tamO_HienTai = LayTamO(rootPart.Position, rootPart.Position.Y)
-
-						-- Tìm 4 ô xung quanh
+						local oTotNhat = nil
+						local kcMin = math.huge
 						local cacHuong = {
 							Vector3.new(KICH_THUOC_O, 0, 0), Vector3.new(-KICH_THUOC_O, 0, 0),
 							Vector3.new(0, 0, KICH_THUOC_O), Vector3.new(0, 0, -KICH_THUOC_O)
 						}
-						local oTotNhat = nil
-						local kcMin = math.huge
-
 						for _, huong in ipairs(cacHuong) do
 							local oThu = tamO_HienTai + huong
 							if KiemTraOTrong(oThu, npc) then
 								local d = (oThu - mucTieu.Position).Magnitude
-								if d < kcMin then kcMin = d; oTotNhat = oThu end
+								if d < kcMin then 
+									kcMin = d
+									oTotNhat = oThu 
+								end
 							end
 						end
-
 						if oTotNhat then
 							local cucGach = DatChoVaDiChuyen(npc, oTotNhat)
 							humanoid:MoveTo(oTotNhat)
-							local to = 0
-							while (rootPart.Position - oTotNhat).Magnitude > 0.5 and to < 30 do
+							local timeOut = 0
+							while timeOut < 20 do
 								task.wait(0.05)
-								to = to + 1
-								if mucTieu and (rootPart.Position - mucTieu.Position).Magnitude <= tamDanhThucTe then break end
+								timeOut = timeOut + 1
+								local distToTarget = (Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z) - Vector3.new(oTotNhat.X, 0, oTotNhat.Z)).Magnitude
+								if distToTarget < 0.2 then break end
+								if rootPart.AssemblyLinearVelocity.Magnitude < 0.1 and timeOut > 5 then break end
 							end
 							if cucGach then cucGach:Destroy() end
 						else
 							humanoid:MoveTo(rootPart.Position)
-							task.wait(0.2)
+							task.wait(0.1)
 						end
 					end
 				else
-					humanoid:MoveTo(rootPart.Position) -- Không thấy địch
+					humanoid:MoveTo(rootPart.Position)
 				end
 			else
 				humanoid.WalkSpeed = 0
