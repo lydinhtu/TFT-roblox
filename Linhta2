@@ -1,8 +1,8 @@
 local ServerScriptService = game:GetService("ServerScriptService")
-local TweenService = game:GetService("TweenService") -- Cần dùng Tween thì gọi ở đây
+local TweenService = game:GetService("TweenService")
 local UnitAI = require(ServerScriptService:WaitForChild("UnitAI"))
 
--- 1. ĐỊNH NGHĨA KỸ NĂNG RIÊNG (Nằm gọn trong file này)
+-- 1. ĐỊNH NGHĨA KỸ NĂNG RIÊNG
 local function ChieuBanCung(npc, mucTieu, satThuong)
 	-- Tạo mũi tên
 	local dan = Instance.new("Part")
@@ -21,19 +21,21 @@ local function ChieuBanCung(npc, mucTieu, satThuong)
 
 	tween.Completed:Connect(function()
 		dan:Destroy()
-		-- Gây sát thương khi trúng
-		local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
-		if eHum then eHum:TakeDamage(satThuong) end
+
+		-- [SỬA LỖI TẠI ĐÂY] Kiểm tra xem mục tiêu và cha của nó còn tồn tại không
+		if mucTieu and mucTieu.Parent then
+			local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
+			if eHum then 
+				eHum:TakeDamage(satThuong) 
+			end
+		end
 	end)
 end
 
 -- 2. CẤU HÌNH VÀ GỬI KỸ NĂNG CHO AI
 local config = {
 	AnimationID = "rbxassetid://507777826",
-
-	-- Truyền cái hàm bên trên vào đây!
 	KyNangTanCong = ChieuBanCung 
 }
 
--- Kích hoạt
 UnitAI.KhoiTao(script.Parent, config)
