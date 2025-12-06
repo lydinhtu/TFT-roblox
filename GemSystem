@@ -2,101 +2,53 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
--- [QUAN TRỌNG] Kiểm tra xem file GemConfig có tồn tại không
+-- Kiểm tra Config
 local gemConfigModule = ReplicatedStorage:FindFirstChild("GemConfig")
 if not gemConfigModule then
 	warn("❌ Lỗi: Không tìm thấy Module 'GemConfig' trong ReplicatedStorage!")
-	return -- Dừng script lại nếu thiếu Config
+	return 
 end
-
 local GemConfig = require(gemConfigModule)
 
--- 1. TẠO REMOTE EVENT (Để gửi tin cho Client vẽ UI)
+-- 1. TẠO CÁC EVENT
 local remoteGemDrop = ReplicatedStorage:FindFirstChild("SuKienNhatGem") or Instance.new("RemoteEvent")
 remoteGemDrop.Name = "SuKienNhatGem"
 remoteGemDrop.Parent = ReplicatedStorage
 
--- 2. TẠO BINDABLE EVENT (Để UnitAI gọi sang)
+local remoteEquip = ReplicatedStorage:FindFirstChild("SuKienTrangBiGem") or Instance.new("RemoteEvent")
+remoteEquip.Name = "SuKienTrangBiGem"
+remoteEquip.Parent = ReplicatedStorage
+
 local bindable = ServerStorage:FindFirstChild("EnemyDiedEvent") or Instance.new("BindableEvent")
 bindable.Name = "EnemyDiedEvent"
 bindable.Parent = ServerStorage
 
-print("✅ GemSystem đã khởi động! Đã tạo EnemyDiedEvent.")
+print("✅ GemSystem đã khởi động!")
 
-
+-- 2. XỬ LÝ RỚT ĐỒ
 local DROP_CHANCE = 0.5 
-
--- 3. XỬ LÝ KHI NHẬN ĐƯỢC TIN QUÁI CHẾT
 bindable.Event:Connect(function(player)
-	print("💎 GemSystem: Nhận được tin quái chết từ " .. player.Name)
-
 	if math.random() <= DROP_CHANCE then
-		-- Lấy danh sách tất cả Gem từ Config
 		local list = {}
-		for id, _ in pairs(GemConfig) do
-			table.insert(list, id)
-		end
+		for id, _ in pairs(GemConfig) do table.insert(list, id) end
 
 		if #list > 0 then
-			-- Chọn bừa 1 viên
 			local gemID = list[math.random(1, #list)]
-			print("🎲 Đã random ra ngọc: " .. gemID .. " -> Gửi cho Client...")
-
-			-- Gửi về cho người chơi
 			remoteGemDrop:FireClient(player, gemID)
-		else
-			warn("⚠️ GemConfig đang rỗng! Hãy thêm ngọc vào file Config.")
 		end
-	else
-		print("❌ Không rớt đồ (Do tỷ lệ)")
 	end
 end)
--- ... (Giữ nguyên code cũ của GemSystem ở trên)
 
--- [MỚI] TẠO SỰ KIỆN TRANG BỊ
-local remoteEquip = ReplicatedStorage:FindFirstChild("SuKienTrangBiGem") or Instance.new("RemoteEvent")
-remoteEquip.Name = "SuKienTrangBiGem"
-remoteEquip.Parent = ReplicatedStorage
-
--- XỬ LÝ KHI NGƯỜI CHƠI LẮP NGỌC
-remoteEquip.OnServerEvent:Connect(function(player, gemID, unitModel)
-	if not unitModel or not unitModel:FindFirstChild("Humanoid") then return end
-
-	-- Kiểm tra xem lính có thuộc về người chơi không (tránh hack)
-	local chuSoHuu = unitModel:GetAttribute("ChuSoHuu")
-	-- (Nếu game bạn chưa set Attribute ChuSoHuu thì tạm bỏ qua dòng này)
-
-	print("✅ Server: Đã lắp ngọc " .. gemID .. " cho " .. unitModel.Name)
-
-	-- GẮN MÁC NGỌC VÀO LÍNH
-	-- UnitAI sẽ đọc cái này để biết lính đang dùng chiêu gì
-	unitModel:SetAttribute("GemID", gemID)
-
-	-- [HIỆU ỨNG] Tạo vòng sáng báo hiệu thành công
-	local highlight = Instance.new("Highlight")
-	highlight.FillColor = Color3.fromRGB(255, 255, 255)
-	highlight.OutlineColor = GemConfig[gemID].Color
-	highlight.Parent = unitModel
-
-	game.Debris:AddItem(highlight, 0.5) -- Xóa hiệu ứng sau 0.5s
-end)
--- ... (Phần trên của GemSystem giữ nguyên) ...
-
-local remoteEquip = ReplicatedStorage:FindFirstChild("SuKienTrangBiGem") or Instance.new("RemoteEvent")
-remoteEquip.Name = "SuKienTrangBiGem"
-remoteEquip.Parent = ReplicatedStorage
-
--- XỬ LÝ LẮP NGỌC THÔNG MINH
+-- 3. XỬ LÝ LẮP TRANG BỊ (LOGIC MỚI CỦA BẠN)
 remoteEquip.OnServerEvent:Connect(function(player, gemID, unitModel)
 	if not unitModel or not unitModel:FindFirstChild("Humanoid") then return end
 
 	local gemInfo = GemConfig[gemID]
 	if not gemInfo then return end
 
-	-- Lấy tên gốc của tướng (đã được ShopManager set lúc mua)
-	local tenUnitGoc = unitModel:GetAttribute("TenUnit") -- Ví dụ: "LinhTa1", "LinhTa2"
+	local tenUnitGoc = unitModel:GetAttribute("TenUnit")
 
-	-- 1. KIỂM TRA ĐIỀU KIỆN TƯỚNG (Cho ngọc Active)
+	-- A. KIỂM TRA ĐIỀU KIỆN TƯỚNG (AllowedUnits)
 	if gemInfo.AllowedUnits then
 		local duocPhep = false
 		for _, u in pairs(gemInfo.AllowedUnits) do
@@ -107,30 +59,27 @@ remoteEquip.OnServerEvent:Connect(function(player, gemID, unitModel)
 		end
 
 		if not duocPhep then
-			warn("⛔ Ngọc này không dành cho " .. (tenUnitGoc or "Unit này") .. "!")
-			return -- Dừng lại, không cho lắp
+			warn("⛔ Ngọc " .. gemInfo.Name .. " không dành cho " .. (tenUnitGoc or "Unit này") .. "!")
+			return 
 		end
 	end
 
-	-- 2. XỬ LÝ THEO LOẠI NGỌC
+	-- B. XỬ LÝ THEO LOẠI NGỌC
 	if gemInfo.Type == "Active" then
-		-- Lắp vào slot Chính
-		unitModel:SetAttribute("GemMain", gemID)
+		unitModel:SetAttribute("GemMain", gemID) -- Gắn vào slot Chính
 		print("✅ Đã lắp Skill Chính: " .. gemInfo.Name)
 
 	elseif gemInfo.Type == "Support" then
-		-- Kiểm tra xem có Skill Chính chưa
 		if unitModel:GetAttribute("GemMain") then
-			-- Lắp vào slot Hỗ Trợ
-			unitModel:SetAttribute("GemSupport", gemID)
+			unitModel:SetAttribute("GemSupport", gemID) -- Gắn vào slot Hỗ Trợ
 			print("✅ Đã lắp Hỗ Trợ: " .. gemInfo.Name)
 		else
-			warn("⛔ Phải có ngọc Kỹ Năng trước mới được lắp ngọc Hỗ Trợ!")
-			return -- Dừng lại
+			warn("⛔ Cần có Ngọc Kỹ Năng trước mới được lắp Ngọc Hỗ Trợ!")
+			return 
 		end
 	end
 
-	-- Hiệu ứng thành công
+	-- Hiệu ứng
 	local highlight = Instance.new("Highlight")
 	highlight.FillColor = Color3.fromRGB(255, 255, 255)
 	highlight.OutlineColor = gemInfo.Color
