@@ -208,6 +208,7 @@ function UnitAI.KhoiTao(npc, config)
 					local tamDanhThucTe = math.max(statsTamDanh.Value, KICH_THUOC_O - 1)
 					local dist = (rootPart.Position - mucTieu.Position).Magnitude
 					if dist <= tamDanhThucTe then
+						-- 1. XOAY & ANIMATION
 						local lookPos = Vector3.new(mucTieu.Position.X, rootPart.Position.Y, mucTieu.Position.Z)
 						rootPart.CFrame = CFrame.lookAt(rootPart.Position, lookPos)
 						humanoid.WalkSpeed = 0
@@ -215,81 +216,87 @@ function UnitAI.KhoiTao(npc, config)
 						attackTrack:Play()
 						task.wait(0.3) -- Đợi vung tay
 
-						-- [LOGIC MỚI] KIỂM TRA NGỌC
-						local gemID = npc:GetAttribute("GemID")
-						local gemInfo = GemConfig[gemID]
+						-- 2. ĐỌC 2 SLOT NGỌC (CHÍNH + HỖ TRỢ)
+						local gemMainID = npc:GetAttribute("GemMain")
+						local gemSupportID = npc:GetAttribute("GemSupport")
 
-						if gemID and gemInfo and gemInfo.Type == "Active" then
-							-- === TRƯỜNG HỢP 1: CÓ NGỌC KỸ NĂNG ===
-							print("🔥 Dùng kỹ năng ngọc: " .. gemInfo.Name)
+						local mainInfo = GemConfig[gemMainID]
+						local supportInfo = GemConfig[gemSupportID]
 
-							-- TÍNH SÁT THƯƠNG (Gốc * Hệ số ngọc)
-							local finalDamage = statsSatThuong.Value * gemInfo.DamagePercent
+						local daDungSkill = false
 
-							-- [VÍ DỤ KỸ NĂNG: CẦU LỬA]
-							if gemID == "CauLua" then
+						-- Chỉ dùng skill nếu có Ngọc Chính (Active)
+						if gemMainID and mainInfo and mainInfo.Type == "Active" then
+							daDungSkill = true
+
+							-- Lấy chỉ số gốc
+							local damagePercent = mainInfo.DamagePercent or 1
+							local cooldown = mainInfo.Cooldown or 1.5
+
+							-- Cộng hưởng từ Ngọc Hỗ Trợ (Nếu có)
+							if gemSupportID and supportInfo and supportInfo.Type == "Support" then
+								print("✨ Kích hoạt Hỗ Trợ: " .. supportInfo.Name)
+								if supportInfo.BuffDamage then
+									damagePercent = damagePercent + supportInfo.BuffDamage
+								end
+								if supportInfo.BuffCooldown then
+									cooldown = cooldown * (1 - supportInfo.BuffCooldown)
+								end
+							end
+
+							-- Tính Damage cuối
+							local finalDamage = statsSatThuong.Value * damagePercent
+							print("🔥 Skill: " .. mainInfo.Name .. " | Dmg: " .. finalDamage)
+
+							-- [THI TRIỂN CẦU LỬA]
+							if gemMainID == "CauLua" then
 								local ball = Instance.new("Part")
-								ball.Shape = Enum.PartType.Ball
+								ball.Shape = "Ball"
 								ball.Size = Vector3.new(2,2,2)
-								ball.Color = gemInfo.Color
-								ball.Material = Enum.Material.Neon
+								ball.Color = mainInfo.Color
+								ball.Material = "Neon"
 								ball.CanCollide = false
-								ball.Position = rootPart.Position + Vector3.new(0,2,0)
+								ball.Position = rootPart.Position + Vector3.new(0, 2, 0)
 								ball.Parent = workspace
 
-								-- Bay tới địch
-								local tweenService = game:GetService("TweenService")
-								local tween = tweenService:Create(ball, TweenInfo.new(0.5), {Position = mucTieu.Position})
+								local tween = TweenService:Create(ball, TweenInfo.new(0.5), {Position = mucTieu.Position})
 								tween:Play()
 
 								tween.Completed:Connect(function()
 									ball:Destroy()
-									-- Gây nổ diện rộng
-									local explosion = Instance.new("Explosion")
-									explosion.Position = mucTieu.Position
-									explosion.BlastRadius = 8
-									explosion.BlastPressure = 0 -- Không đẩy bay lính
-									explosion.Parent = workspace
+									local eff = Instance.new("Explosion")
+									eff.Position = mucTieu.Position
+									eff.BlastRadius = 0 
+									eff.Parent = workspace
 
-									-- Trừ máu kẻ địch xung quanh
-									if mucTieu.Parent then
-										local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
-										if eHum then eHum:TakeDamage(finalDamage) end
+									if mucTieu.Parent and mucTieu.Parent:FindFirstChild("Humanoid") then
+										mucTieu.Parent.Humanoid:TakeDamage(finalDamage)
 									end
 								end)
 
-								-- [VÍ DỤ KỸ NĂNG: BĂNG GIÁ]
-							elseif gemID == "BangGia" then
-								-- (Bạn có thể code thêm logic bắn băng làm chậm ở đây)
-								if mucTieu.Parent then
-									local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
-									if eHum then 
-										eHum:TakeDamage(finalDamage)
-										eHum.WalkSpeed = 8 -- Làm chậm
-									end
+								-- [THI TRIỂN BĂNG GIÁ]
+							elseif gemMainID == "BangGia" then
+								if mucTieu.Parent and mucTieu.Parent:FindFirstChild("Humanoid") then
+									mucTieu.Parent.Humanoid:TakeDamage(finalDamage)
+									mucTieu.Parent.Humanoid.WalkSpeed = 8 -- Làm chậm
 								end
 							end
 
+							-- Hồi chiêu (theo ngọc)
+							task.wait(cooldown)
 						else
-							-- === TRƯỜNG HỢP 2: ĐÁNH THƯỜNG (HOẶC NGỌC SUPPORT) ===
+							-- Không có ngọc -> Đánh thường
 							if config.KyNangTanCong then
 								config.KyNangTanCong(npc, mucTieu, statsSatThuong.Value)
 							else
-								if mucTieu.Parent then
-									local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
-									if eHum then eHum:TakeDamage(statsSatThuong.Value) end
+								if mucTieu.Parent and mucTieu.Parent:FindFirstChild("Humanoid") then
+									mucTieu.Parent.Humanoid:TakeDamage(statsSatThuong.Value)
 								end
 							end
+							-- Hồi chiêu thường
+							task.wait(math.max(0.1, (1 / statsTocDoDanh.Value) - 0.3))
 						end
 
-						-- Hồi chiêu (Nếu có ngọc thì dùng hồi chiêu của ngọc, không thì dùng tốc đánh)
-						local delayTime = 0
-						if gemInfo and gemInfo.Cooldown then
-							delayTime = gemInfo.Cooldown
-						else
-							delayTime = math.max(0.1, (1 / statsTocDoDanh.Value) - 0.3)
-						end
-						task.wait(delayTime)
 					else
 						humanoid.WalkSpeed = statsTocDoDiChuyen.Value
 						local tamO_HienTai = LayTamO(rootPart.Position, rootPart.Position.Y)
