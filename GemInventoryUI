@@ -1,43 +1,63 @@
--- File: ReplicatedStorage/GemConfig
-local GemConfig = {
-	-- === NGỌC KỸ NĂNG (ACTIVE) ===
-	["CauLua"] = {
-		Name = "Cầu Lửa",
-		Type = "Active", -- Kỹ năng chủ động
-		Icon = "rbxassetid://123456789", -- Thay ID ảnh của bạn vào
-		Color = Color3.fromRGB(255, 100, 0),
-		Description = "Bắn ra quả cầu lửa gây sát thương diện rộng.",
-		DamagePercent = 1.5, -- 150% sát thương gốc
-		Cooldown = 2
-	},
-	["BangGia"] = {
-		Name = "Mũi Tên Băng",
-		Type = "Active",
-		Icon = "rbxassetid://123456789",
-		Color = Color3.fromRGB(0, 200, 255),
-		Description = "Bắn làm chậm kẻ địch.",
-		DamagePercent = 0.8,
-		SlowEffect = 0.5, -- Giảm 50% tốc chạy
-		Cooldown = 1.5
-	},
+-- File: StarterGui/GemInventoryUI (LocalScript)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local GemConfig = require(ReplicatedStorage:WaitForChild("GemConfig"))
+local remoteGemDrop = ReplicatedStorage:WaitForChild("SuKienNhatGem")
 
-	-- === NGỌC HỖ TRỢ (SUPPORT) ===
-	["CuongHoaSatThuong"] = {
-		Name = "Đa Sắc Ngọc",
-		Type = "Support", -- Ngọc bổ trợ
-		Icon = "rbxassetid://123456789",
-		Color = Color3.fromRGB(255, 0, 0),
-		Description = "Tăng 50% sát thương cho kỹ năng chính.",
-		BuffDamage = 0.5 -- +50% Damage
-	},
-	["GiamHoiChieu"] = {
-		Name = "Ngọc Thời Gian",
-		Type = "Support",
-		Icon = "rbxassetid://123456789",
-		Color = Color3.fromRGB(255, 255, 0),
-		Description = "Giảm 30% hồi chiêu.",
-		BuffCooldown = 0.3 -- -30% CD
-	}
-}
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
-return GemConfig
+-- 1. TẠO GIAO DIỆN
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "GemUI"
+screenGui.Parent = playerGui
+
+local frame = Instance.new("ScrollingFrame")
+frame.Name = "InventoryFrame"
+frame.Size = UDim2.new(0.15, 0, 0.4, 0)
+frame.Position = UDim2.new(0, 10, 0.3, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+frame.BackgroundTransparency = 0.5
+frame.BorderSizePixel = 2
+frame.BorderColor3 = Color3.fromRGB(255, 215, 0)
+frame.Parent = screenGui
+
+local layout = Instance.new("UIGridLayout")
+layout.CellSize = UDim2.new(0.45, 0, 0.2, 0)
+layout.CellPadding = UDim2.new(0.03, 0, 0.02, 0)
+layout.Parent = frame
+
+-- 2. HÀM THÊM GEM VÀO TÚI
+local function ThemGemVaoTui(gemID)
+	local info = GemConfig[gemID]
+	if not info then return end
+	
+	local itemBtn = Instance.new("TextButton")
+	itemBtn.Name = gemID
+	itemBtn.BackgroundColor3 = info.Color
+	itemBtn.Text = "" 
+	itemBtn.Parent = frame
+	
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.2, 0)
+	corner.Parent = itemBtn
+	
+	local lblName = Instance.new("TextLabel")
+	lblName.Text = info.Name
+	lblName.Size = UDim2.new(1,0,1,0)
+	lblName.BackgroundTransparency = 1
+	lblName.Font = Enum.Font.SourceSansBold
+	lblName.TextColor3 = Color3.new(1,1,1)
+	lblName.TextWrapped = true
+	lblName.Parent = itemBtn
+	
+	itemBtn.MouseButton1Click:Connect(function()
+		print("Đã chọn ngọc: " .. info.Name)
+	end)
+end
+
+-- 3. NHẬN TÍN HIỆU TỪ SERVER
+remoteGemDrop.OnClientEvent:Connect(function(gemID)
+	print("🎁 Client đã nhận được ngọc: " .. gemID)
+	ThemGemVaoTui(gemID)
+end)
