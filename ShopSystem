@@ -1,28 +1,26 @@
+-- === Script: ShopSystem (Client) - Đã sửa lỗi Humanoid ===
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local funcMuaLinh = ReplicatedStorage:WaitForChild("ChucNangMuaLinh")
 local player = Players.LocalPlayer
 
--- === CẤU HÌNH SHOP ===
-local DANH_SACH_POOL = {"LinhTa", "LinhTa2"} -- Danh sách các tướng có thể xuất hiện
-local GIA_REROLL = 2 -- Phí đổi lại (Reroll)
+local DANH_SACH_POOL = {"LinhTa", "LinhTa2"}
+local GIA_REROLL = 2
 
--- === 1. TẠO GIAO DIỆN (GUI) TỰ ĐỘNG ===
+-- === 1. TẠO GIAO DIỆN ===
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ShopUI"
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
--- Khung chứa Shop (Nằm ở dưới cùng)
 local shopFrame = Instance.new("Frame")
 shopFrame.Name = "ShopFrame"
-shopFrame.Size = UDim2.new(0.6, 0, 0.15, 0) -- Rộng 60% màn hình
-shopFrame.Position = UDim2.new(0.2, 0, 0.85, 0) -- Nằm ở dưới
+shopFrame.Size = UDim2.new(0.6, 0, 0.15, 0)
+shopFrame.Position = UDim2.new(0.2, 0, 0.85, 0)
 shopFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 shopFrame.BorderSizePixel = 2
-shopFrame.BorderColor3 = Color3.fromRGB(255, 215, 0) -- Viền vàng
+shopFrame.BorderColor3 = Color3.fromRGB(255, 215, 0)
 shopFrame.Parent = screenGui
 
--- Tiêu đề Shop
 local title = Instance.new("TextLabel")
 title.Text = "CỬA HÀNG"
 title.Size = UDim2.new(1, 0, 0.2, 0)
@@ -33,7 +31,17 @@ title.Font = Enum.Font.FredokaOne
 title.TextSize = 20
 title.Parent = shopFrame
 
--- Nút Reroll (Đổi lại)
+local lblCount = Instance.new("TextLabel")
+lblCount.Name = "UnitCount"
+lblCount.Text = "Lính: 0"
+lblCount.Size = UDim2.new(0.2, 0, 0.5, 0)
+lblCount.Position = UDim2.new(0.8, 0, -0.5, 0)
+lblCount.BackgroundTransparency = 1
+lblCount.TextColor3 = Color3.new(1, 1, 1)
+lblCount.Font = Enum.Font.SourceSansBold
+lblCount.TextSize = 18
+lblCount.Parent = shopFrame
+
 local btnReroll = Instance.new("TextButton")
 btnReroll.Name = "RerollBtn"
 btnReroll.Text = "Đổi Lại (" .. GIA_REROLL .. "G)"
@@ -46,7 +54,6 @@ btnReroll.TextSize = 18
 btnReroll.Parent = shopFrame
 local uiCorner = Instance.new("UICorner", btnReroll)
 
--- Khu vực chứa 5 thẻ bài
 local container = Instance.new("Frame")
 container.Size = UDim2.new(0.8, 0, 1, 0)
 container.Position = UDim2.new(0.2, 0, 0, 0)
@@ -54,7 +61,7 @@ container.BackgroundTransparency = 1
 container.Parent = shopFrame
 
 local gridLayout = Instance.new("UIGridLayout")
-gridLayout.CellSize = UDim2.new(0.18, 0, 0.9, 0) -- Kích thước mỗi thẻ
+gridLayout.CellSize = UDim2.new(0.18, 0, 0.9, 0)
 gridLayout.CellPadding = UDim2.new(0.02, 0, 0, 0)
 gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 gridLayout.VerticalAlignment = Enum.VerticalAlignment.Center
@@ -68,13 +75,11 @@ local function TaoTheBai(tenUnit)
 	card.AutoButtonColor = true
 	card.Parent = container
 
-	-- Trang trí thẻ
 	local uiStroke = Instance.new("UIStroke")
 	uiStroke.Thickness = 2
 	uiStroke.Color = Color3.fromRGB(100, 100, 100)
 	uiStroke.Parent = card
 
-	-- Tên tướng
 	local lblName = Instance.new("TextLabel")
 	lblName.Text = tenUnit
 	lblName.Size = UDim2.new(1, 0, 0.3, 0)
@@ -84,7 +89,6 @@ local function TaoTheBai(tenUnit)
 	lblName.TextSize = 16
 	lblName.Parent = card
 
-	-- Giá tiền (Giả sử: LinhTa=10, LinhTa2=20)
 	local gia = 10
 	if tenUnit == "LinhTa2" then gia = 20 end
 
@@ -97,17 +101,13 @@ local function TaoTheBai(tenUnit)
 	lblPrice.Font = Enum.Font.SourceSansBold
 	lblPrice.Parent = card
 
-	-- Màu sắc phân biệt (LinhTa=Cam, LinhTa2=Xanh)
 	if tenUnit == "LinhTa" then uiStroke.Color = Color3.fromRGB(255, 170, 0) end
 	if tenUnit == "LinhTa2" then uiStroke.Color = Color3.fromRGB(0, 170, 255) end
 
-	-- SỰ KIỆN KHI BẤM MUA
 	card.MouseButton1Click:Connect(function()
-		-- Gửi yêu cầu mua đúng con tướng này
 		local ketQua = funcMuaLinh:InvokeServer(tenUnit)
-
 		if ketQua == "ThanhCong" then
-			card:Destroy() -- Mua xong thì mất thẻ
+			card:Destroy()
 		elseif ketQua == "HetTien" then
 			lblPrice.TextColor3 = Color3.fromRGB(255, 0, 0)
 			lblPrice.Text = "Thiếu Tiền!"
@@ -118,24 +118,44 @@ local function TaoTheBai(tenUnit)
 	end)
 end
 
--- === 3. HÀM LÀM MỚI CỬA HÀNG (REROLL) ===
+-- === 3. HÀM REROLL ===
 local function RerollShop()
-	-- Xóa hết thẻ cũ
 	for _, v in pairs(container:GetChildren()) do
 		if v:IsA("TextButton") then v:Destroy() end
 	end
-
-	-- Tạo 5 thẻ mới ngẫu nhiên
 	for i = 1, 5 do
 		local randomUnit = DANH_SACH_POOL[math.random(1, #DANH_SACH_POOL)]
 		TaoTheBai(randomUnit)
 	end
 end
 
--- Sự kiện nút Reroll
 btnReroll.MouseButton1Click:Connect(function()
 	RerollShop()
 end)
 
--- Tạo shop lần đầu khi vào game
 RerollShop()
+
+-- === 4. HỆ THỐNG ĐẾM LÍNH (ĐÃ SỬA LỖI 107) ===
+task.spawn(function()
+	while true do
+		task.wait(0.5) 
+		local soLuongLinh = 0
+
+		for _, v in pairs(workspace:GetChildren()) do
+			-- [QUAN TRỌNG] Kiểm tra Humanoid bằng FindFirstChild trước khi dùng
+			local human = v:FindFirstChild("Humanoid")
+			local root = v:FindFirstChild("HumanoidRootPart")
+
+			if human and root and not Players:GetPlayerFromCharacter(v) then
+				-- Chỉ đếm lính sống (không có attribute DaChet)
+				if v:GetAttribute("DaChet") ~= true then
+					soLuongLinh = soLuongLinh + 1
+				end
+			end
+		end
+
+		if lblCount then
+			lblCount.Text = "Lính: " .. soLuongLinh
+		end
+	end
+end)
