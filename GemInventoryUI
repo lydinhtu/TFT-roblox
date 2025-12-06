@@ -1,0 +1,43 @@
+-- File: ReplicatedStorage/GemConfig
+local GemConfig = {
+	-- === NGỌC KỸ NĂNG (ACTIVE) ===
+	["CauLua"] = {
+		Name = "Cầu Lửa",
+		Type = "Active", -- Kỹ năng chủ động
+		Icon = "rbxassetid://123456789", -- Thay ID ảnh của bạn vào
+		Color = Color3.fromRGB(255, 100, 0),
+		Description = "Bắn ra quả cầu lửa gây sát thương diện rộng.",
+		DamagePercent = 1.5, -- 150% sát thương gốc
+		Cooldown = 2
+	},
+	["BangGia"] = {
+		Name = "Mũi Tên Băng",
+		Type = "Active",
+		Icon = "rbxassetid://123456789",
+		Color = Color3.fromRGB(0, 200, 255),
+		Description = "Bắn làm chậm kẻ địch.",
+		DamagePercent = 0.8,
+		SlowEffect = 0.5, -- Giảm 50% tốc chạy
+		Cooldown = 1.5
+	},
+
+	-- === NGỌC HỖ TRỢ (SUPPORT) ===
+	["CuongHoaSatThuong"] = {
+		Name = "Đa Sắc Ngọc",
+		Type = "Support", -- Ngọc bổ trợ
+		Icon = "rbxassetid://123456789",
+		Color = Color3.fromRGB(255, 0, 0),
+		Description = "Tăng 50% sát thương cho kỹ năng chính.",
+		BuffDamage = 0.5 -- +50% Damage
+	},
+	["GiamHoiChieu"] = {
+		Name = "Ngọc Thời Gian",
+		Type = "Support",
+		Icon = "rbxassetid://123456789",
+		Color = Color3.fromRGB(255, 255, 0),
+		Description = "Giảm 30% hồi chiêu.",
+		BuffCooldown = 0.3 -- -30% CD
+	}
+}
+
+return GemConfig
