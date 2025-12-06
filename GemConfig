@@ -1,37 +1,40 @@
--- File: ReplicatedStorage/GemConfig
 local GemConfig = {
 	-- === NGỌC KỸ NĂNG (ACTIVE) ===
 	["CauLua"] = {
 		Name = "Cầu Lửa",
-		Type = "Active", -- Kỹ năng chủ động
-		Icon = "rbxassetid://123456789", -- Thay ID ảnh của bạn vào
+		Type = "Active",
+		Icon = "rbxassetid://123456789",
 		Color = Color3.fromRGB(255, 100, 0),
-		Description = "Bắn ra quả cầu lửa gây sát thương diện rộng.",
-		DamagePercent = 1.5, -- 150% sát thương gốc
-		Cooldown = 2
+		Description = "Bắn ra quả cầu lửa (Chỉ cho LinhTa2).",
+		DamagePercent = 1.5,
+		Cooldown = 2,
+		-- [MỚI] CHỈ ĐỊNH TƯỚNG ĐƯỢC DÙNG (Dựa theo Attribute 'TenUnit')
+		AllowedUnits = {"LinhTa2"} 
 	},
 	["BangGia"] = {
 		Name = "Mũi Tên Băng",
 		Type = "Active",
 		Icon = "rbxassetid://123456789",
 		Color = Color3.fromRGB(0, 200, 255),
-		Description = "Bắn làm chậm kẻ địch.",
+		Description = "Bắn làm chậm (Chỉ cho LinhTa2).",
 		DamagePercent = 0.8,
-		SlowEffect = 0.5, -- Giảm 50% tốc chạy
-		Cooldown = 1.5
+		SlowEffect = 0.5,
+		Cooldown = 1.5,
+		-- [MỚI]
+		AllowedUnits = {"LinhTa2"}
 	},
 
 	-- === NGỌC HỖ TRỢ (SUPPORT) ===
 	["CuongHoaSatThuong"] = {
-		Name = "Đa Sắc Ngọc(SP)",
-		Type = "Support", -- Ngọc bổ trợ
+		Name = "Đa Sắc Ngọc (SP)",
+		Type = "Support", 
 		Icon = "rbxassetid://123456789",
 		Color = Color3.fromRGB(255, 0, 0),
 		Description = "Tăng 50% sát thương cho kỹ năng chính.",
 		BuffDamage = 0.5 -- +50% Damage
 	},
 	["GiamHoiChieu"] = {
-		Name = "Ngọc Thời Gian(SP)",
+		Name = "Ngọc Thời Gian (SP)",
 		Type = "Support",
 		Icon = "rbxassetid://123456789",
 		Color = Color3.fromRGB(255, 255, 0),
