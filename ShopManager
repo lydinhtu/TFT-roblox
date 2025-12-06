@@ -1,79 +1,157 @@
+-- === Script: ShopManager (Đã nâng cấp) ===
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local workspace = game:GetService("Workspace")
 local funcMuaLinh = ReplicatedStorage:WaitForChild("ChucNangMuaLinh")
 
-local linhMau = ServerStorage:WaitForChild("LinhTa") 
-local GIA_TIEN = 10
+-- Folder chứa tướng mẫu trong ServerStorage
+local folderTuongMau = ServerStorage:WaitForChild("TuongMau") -- LƯU Ý: Bạn hãy tạo Folder này và bỏ LinhTa, LinhTa2 vào đó
+local GIA_TIEN_CO_BAN = 10
 local folderHangCho = workspace:WaitForChild("HangCho")
-local MAX_SLOTS = 8 -- Số lượng ô hàng chờ
+local MAX_SLOTS = 8 
 
--- Hàm kiểm tra xem một vị trí có ai đứng chưa
+-- Hàm kiểm tra vị trí trống (Giữ nguyên logic cũ)
 local function KiemTraOTrong(position)
-	-- Quét tất cả các con lính đang có trên map
 	for _, v in pairs(workspace:GetChildren()) do
 		if v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") then
-			-- Nếu có con lính nào đứng cách tâm ô dưới 2 mét -> Coi như ô đó đã có người
 			if (v.HumanoidRootPart.Position - position).Magnitude < 2 then
-				return false -- Không trống
+				return false 
 			end
 		end
 	end
-	return true -- Trống
+	return true 
 end
 
-funcMuaLinh.OnServerInvoke = function(player)
-	local stats = player:FindFirstChild("leaderstats")
-	if not stats then return "Loi" end
-	local gold = stats.Gold
+-- === HÀM XỬ LÝ TĂNG SAO (MỚI) ===
+local function XuLyNangCap(player, tenUnit, levelHienTai)
+	-- 1. Tìm tất cả lính của người chơi này, cùng tên, cùng cấp
+	local dsLinhGiongNhau = {}
 
-	if gold.Value < GIA_TIEN then return "HetTien" end
+	for _, unit in pairs(workspace:GetChildren()) do
+		local chuSoHuu = unit:GetAttribute("ChuSoHuu")
+		local ten = unit:GetAttribute("TenUnit")
 
-	-- 1. TÌM Ô TRỐNG THỰC TẾ
-	local slotTimDuoc = nil
+		-- Lấy level từ Stats
+		local lvlVal = 1
+		local stats = unit:FindFirstChild("Humanoid") and unit.Humanoid:FindFirstChild("Stats")
+		if stats and stats:FindFirstChild("Level") then
+			lvlVal = stats.Level.Value
+		end
 
-	for i = 1, MAX_SLOTS do
-		local tenSlot = "Slot_" .. i
-		local slotPart = folderHangCho:FindFirstChild(tenSlot)
-
-		if slotPart then
-			-- Kiểm tra xem ô này có trống không
-			if KiemTraOTrong(slotPart.Position) then
-				slotTimDuoc = slotPart
-				break -- Tìm thấy rồi thì dừng
-			end
+		if chuSoHuu == player.Name and ten == tenUnit and lvlVal == levelHienTai then
+			table.insert(dsLinhGiongNhau, unit)
 		end
 	end
 
+	-- 2. Nếu đủ 3 con -> GỘP
+	if #dsLinhGiongNhau >= 3 then
+		print("🌟 ĐÃ ĐỦ 3 CON " .. tenUnit .. " CẤP " .. levelHienTai .. "! TIẾN HÀNH NÂNG CẤP!")
+
+		-- Lấy vị trí của con cuối cùng (để con mới xuất hiện tại đó)
+		local unitCuoi = dsLinhGiongNhau[#dsLinhGiongNhau]
+		local viTriMoi = unitCuoi.HumanoidRootPart.CFrame
+
+		-- Xóa 3 con cũ
+		for i = 1, 3 do
+			local hieuUng = Instance.new("Explosion") -- Hiệu ứng nổ nhỏ cho đẹp
+			hieuUng.Position = dsLinhGiongNhau[i].HumanoidRootPart.Position
+			hieuUng.Parent = workspace
+			dsLinhGiongNhau[i]:Destroy()
+		end
+
+		-- Tạo con mới (Cấp cao hơn)
+		local mauUnit = folderTuongMau:FindFirstChild(tenUnit)
+		if mauUnit then
+			local unitMoi = mauUnit:Clone()
+			unitMoi.Parent = workspace
+			unitMoi.Name = "Linh_" .. player.Name .. "_LV" .. (levelHienTai + 1)
+			unitMoi:SetAttribute("ChuSoHuu", player.Name)
+			unitMoi:SetAttribute("TenUnit", tenUnit)
+			unitMoi:SetAttribute("DaRaTran", false) -- Mặc định ở hàng chờ/sàn đấu tùy logic, tạm để false
+
+			unitMoi.HumanoidRootPart.CFrame = viTriMoi
+
+			-- Cập nhật Level mới
+			local s = unitMoi.Humanoid:FindFirstChild("Stats")
+			if s then
+				if not s:FindFirstChild("Level") then
+					local lv = Instance.new("IntValue", s)
+					lv.Name = "Level"
+				end
+				s.Level.Value = levelHienTai + 1
+
+				-- TĂNG CHỈ SỐ SỨC MẠNH THEO SAO
+				unitMoi.Humanoid.MaxHealth = unitMoi.Humanoid.MaxHealth * 1.8 -- Máu gấp 1.8 lần
+				unitMoi.Humanoid.Health = unitMoi.Humanoid.MaxHealth
+				local satThuong = s:FindFirstChild("SatThuong")
+				if satThuong then
+					satThuong.Value = satThuong.Value * 1.5 -- Dame gấp 1.5 lần
+				end
+
+				-- Đổi màu chút để nhận biết (Nếu muốn)
+				local highlight = Instance.new("Highlight")
+				highlight.FillColor = Color3.fromRGB(255, 215, 0) -- Màu vàng
+				highlight.Parent = unitMoi
+			end
+
+			-- Đệ quy: Kiểm tra tiếp xem có đủ 3 con cấp cao vừa tạo không (Ví dụ 3 con 2 sao -> 1 con 3 sao)
+			task.wait(0.1)
+			XuLyNangCap(player, tenUnit, levelHienTai + 1)
+		end
+	end
+end
+
+-- === LOGIC MUA LÍNH ===
+funcMuaLinh.OnServerInvoke = function(player, tenUnitCanMua) -- Thêm tham số tên Unit
+	local stats = player:FindFirstChild("leaderstats")
+	if not stats then return "Loi" end
+
+	-- Xác định giá tiền (Ví dụ)
+	local giaTien = 10
+	if tenUnitCanMua == "LinhTa2" then giaTien = 20 end
+
+	if stats.Gold.Value < giaTien then return "HetTien" end
+
+	-- Tìm ô trống
+	local slotTimDuoc = nil
+	for i = 1, MAX_SLOTS do
+		local slotPart = folderHangCho:FindFirstChild("Slot_" .. i)
+		if slotPart and KiemTraOTrong(slotPart.Position) then
+			slotTimDuoc = slotPart
+			break
+		end
+	end
 	if slotTimDuoc == nil then return "HetCho" end
 
-	-- 2. TRỪ TIỀN VÀ SINH LÍNH
-	gold.Value = gold.Value - GIA_TIEN
+	-- Trừ tiền & Sinh lính
+	stats.Gold.Value = stats.Gold.Value - giaTien
 
-	local linhMoi = linhMau:Clone()
+	local mauUnit = folderTuongMau:FindFirstChild(tenUnitCanMua)
+	if not mauUnit then return "LoiData" end -- Đảm bảo có mẫu
+
+	local linhMoi = mauUnit:Clone()
 	linhMoi.Parent = workspace
-	linhMoi.Name = "Linh_" .. player.Name .. "_" .. math.random(1, 10000)
+	linhMoi.Name = "Linh_" .. player.Name .. "_" .. math.random(1,1000)
 
-	if linhMoi:FindFirstChild("Humanoid") then
-		linhMoi.Humanoid.DisplayName = "Chiến Binh"
-	end
-
-	if linhMoi:FindFirstChild("HumanoidRootPart") then
-		-- Đặt vào đúng vị trí ô tìm được
-		linhMoi.HumanoidRootPart.CFrame = slotTimDuoc.CFrame + Vector3.new(0, 3, 0)
-	end
-
-	-- Mới mua về thì ở hàng chờ -> Chưa ra trận
+	-- Gán các Attribute quan trọng để quản lý
+	linhMoi:SetAttribute("ChuSoHuu", player.Name)
+	linhMoi:SetAttribute("TenUnit", tenUnitCanMua)
 	linhMoi:SetAttribute("DaRaTran", false)
 
-	-- Gán Level
+	linhMoi.HumanoidRootPart.CFrame = slotTimDuoc.CFrame + Vector3.new(0, 3, 0)
+
+	-- Gán Level 1 mặc định
 	local s = linhMoi.Humanoid:FindFirstChild("Stats")
-	if s and not s:FindFirstChild("Level") then
-		local lv = Instance.new("IntValue")
+	if s then
+		local lv = s:FindFirstChild("Level") or Instance.new("IntValue", s)
 		lv.Name = "Level"
 		lv.Value = 1
-		lv.Parent = s
 	end
+
+	-- SAU KHI MUA -> KIỂM TRA NÂNG CẤP NGAY
+	task.spawn(function()
+		XuLyNangCap(player, tenUnitCanMua, 1)
+	end)
 
 	return "ThanhCong"
 end
