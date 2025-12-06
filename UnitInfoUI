@@ -1,0 +1,232 @@
+-- File: StarterGui/UnitInfoUI (LocalScript)
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local GemConfig = require(ReplicatedStorage:WaitForChild("GemConfig"))
+
+-- Tạo Event để nhận tín hiệu khi chọn lính (Nếu chưa có thì tạo)
+local eventChonUnit = ReplicatedStorage:FindFirstChild("SuKienChonUnit")
+if not eventChonUnit then
+	eventChonUnit = Instance.new("BindableEvent")
+	eventChonUnit.Name = "SuKienChonUnit"
+	eventChonUnit.Parent = ReplicatedStorage
+end
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- === 1. TẠO GIAO DIỆN (TỰ ĐỘNG VẼ) ===
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "UnitInfoGUI"
+screenGui.Parent = playerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0.2, 0, 0.6, 0) -- Rộng 20%, Cao 60%
+mainFrame.Position = UDim2.new(0.8, -10, 0.2, 0) -- Nằm bên phải
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.BorderSizePixel = 2
+mainFrame.BorderColor3 = Color3.fromRGB(255, 215, 0)
+mainFrame.Visible = false -- Mặc định ẩn
+mainFrame.Parent = screenGui
+
+-- [PHẦN A] ẢNH TƯỚNG (ViewportFrame)
+local viewContainer = Instance.new("Frame")
+viewContainer.Name = "PartA_Image"
+viewContainer.Size = UDim2.new(0.9, 0, 0.35, 0)
+viewContainer.Position = UDim2.new(0.05, 0, 0.02, 0)
+viewContainer.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+viewContainer.Parent = mainFrame
+
+local viewport = Instance.new("ViewportFrame")
+viewport.Size = UDim2.new(1, 0, 1, 0)
+viewport.BackgroundTransparency = 1
+viewport.Parent = viewContainer
+
+local unitNameLabel = Instance.new("TextLabel")
+unitNameLabel.Size = UDim2.new(1, 0, 0.2, 0)
+unitNameLabel.Position = UDim2.new(0, 0, 0.8, 0)
+unitNameLabel.BackgroundTransparency = 0.5
+unitNameLabel.BackgroundColor3 = Color3.new(0,0,0)
+unitNameLabel.TextColor3 = Color3.new(1,1,1)
+unitNameLabel.Font = Enum.Font.FredokaOne
+unitNameLabel.TextSize = 18
+unitNameLabel.Text = "Tên Tướng"
+unitNameLabel.Parent = viewContainer
+
+-- [PHẦN B] CHỈ SỐ (Stats)
+local statsContainer = Instance.new("Frame")
+statsContainer.Name = "PartB_Stats"
+statsContainer.Size = UDim2.new(0.9, 0, 0.35, 0)
+statsContainer.Position = UDim2.new(0.05, 0, 0.39, 0)
+statsContainer.BackgroundTransparency = 1
+statsContainer.Parent = mainFrame
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 5)
+listLayout.Parent = statsContainer
+
+local function TaoDongStat(ten, icon)
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(1, 0, 0.2, 0)
+	f.BackgroundTransparency = 1
+	f.Parent = statsContainer
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1, 0, 1, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.TextColor3 = Color3.new(1, 1, 1)
+	lbl.Font = Enum.Font.SourceSansBold
+	lbl.TextSize = 16
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.Text = icon .. " " .. ten .. ": 0"
+	lbl.Name = "Label"
+	lbl.Parent = f
+	return lbl
+end
+
+local lblSatThuong = TaoDongStat("Sát Thương", "⚔️")
+local lblTocDanh = TaoDongStat("Tốc Đánh", "⚡")
+local lblTamDanh = TaoDongStat("Tầm Đánh", "🎯")
+local lblMau = TaoDongStat("Máu", "❤️")
+
+-- [PHẦN C] CÁC Ô NGỌC (Gems)
+local gemContainer = Instance.new("Frame")
+gemContainer.Name = "PartC_Gems"
+gemContainer.Size = UDim2.new(0.9, 0, 0.2, 0)
+gemContainer.Position = UDim2.new(0.05, 0, 0.76, 0)
+gemContainer.BackgroundTransparency = 1
+gemContainer.Parent = mainFrame
+
+local titleGem = Instance.new("TextLabel")
+titleGem.Text = "Trang Bị"
+titleGem.Size = UDim2.new(1, 0, 0.2, 0)
+titleGem.BackgroundTransparency = 1
+titleGem.TextColor3 = Color3.fromRGB(255, 215, 0)
+titleGem.Font = Enum.Font.FredokaOne
+titleGem.Parent = gemContainer
+
+local gridGem = Instance.new("UIGridLayout")
+gridGem.CellSize = UDim2.new(0.22, 0, 0.7, 0) -- 4 ô
+gridGem.Parent = gemContainer
+
+local gemSlots = {}
+for i = 1, 4 do
+	local slot = Instance.new("ImageButton")
+	slot.Name = "Slot"..i
+	slot.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	slot.Image = "" -- Trống
+	slot.Parent = gemContainer
+
+	local corner = Instance.new("UICorner")
+	corner.Parent = slot
+
+	table.insert(gemSlots, slot)
+end
+
+-- === 2. LOGIC CẬP NHẬT THÔNG TIN ===
+local currentUnit = nil
+local connections = {} -- Để xóa sự kiện cũ tránh lag
+
+local function XoaKetNoiCu()
+	for _, c in pairs(connections) do c:Disconnect() end
+	connections = {}
+end
+
+local function CapNhatHinhAnh3D(unitModel)
+	viewport:ClearAllChildren()
+
+	-- Tạo Camera ảo
+	local cam = Instance.new("Camera")
+	cam.FieldOfView = 25
+	viewport.CurrentCamera = cam
+	viewport.Parent = viewContainer
+	cam.Parent = viewport
+
+	-- Clone con lính vào khung
+	local clone = unitModel:Clone()
+	clone.Parent = viewport
+
+	-- Xóa các script trong clone để nó đứng yên
+	for _, s in pairs(clone:GetDescendants()) do
+		if s:IsA("Script") or s:IsA("LocalScript") then s:Destroy() end
+	end
+
+	-- Đặt Camera nhìn vào lính
+	local root = clone:FindFirstChild("HumanoidRootPart")
+	if root then
+		cam.CFrame = CFrame.new(root.Position + Vector3.new(3, 2, 6), root.Position)
+	end
+end
+
+local function CapNhatNgoc(unitModel)
+	-- Reset 4 ô về trống
+	for i = 1, 4 do
+		gemSlots[i].Image = ""
+		gemSlots[i].BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	end
+
+	-- Slot 1: Ngọc Chính (GemMain)
+	local mainID = unitModel:GetAttribute("GemMain")
+	if mainID and GemConfig[mainID] then
+		gemSlots[1].Image = GemConfig[mainID].Icon
+		gemSlots[1].BackgroundColor3 = GemConfig[mainID].Color
+	end
+
+	-- Slot 2: Ngọc Hỗ Trợ (GemSupport)
+	local suppID = unitModel:GetAttribute("GemSupport")
+	if suppID and GemConfig[suppID] then
+		gemSlots[2].Image = GemConfig[suppID].Icon
+		gemSlots[2].BackgroundColor3 = GemConfig[suppID].Color
+	end
+
+	-- Slot 3 & 4: Tạm thời khóa hoặc mở rộng sau này
+end
+
+local function HienThiThongTin(unitModel)
+	if not unitModel or not unitModel:FindFirstChild("Humanoid") then 
+		mainFrame.Visible = false
+		return 
+	end
+
+	currentUnit = unitModel
+	mainFrame.Visible = true
+	XoaKetNoiCu()
+
+	-- 1. Cập nhật Tên & Ảnh
+	unitNameLabel.Text = unitModel:GetAttribute("TenUnit") or unitModel.Name
+	CapNhatHinhAnh3D(unitModel)
+
+	-- 2. Cập nhật Chỉ số & Lắng nghe thay đổi (Realtime)
+	local hum = unitModel.Humanoid
+	local stats = hum:WaitForChild("Stats")
+
+	local function UpdateText()
+		lblSatThuong.Text = "⚔️ Sát Thương: " .. tostring(stats.SatThuong.Value)
+		lblTocDanh.Text = "⚡ Tốc Đánh: " .. tostring(stats.TocDoDanh.Value)
+		lblTamDanh.Text = "🎯 Tầm Đánh: " .. tostring(stats.TamDanh.Value)
+		lblMau.Text = "❤️ Máu: " .. math.floor(hum.Health) .. "/" .. math.floor(hum.MaxHealth)
+	end
+
+	UpdateText() -- Cập nhật ngay lập tức
+
+	-- Đăng ký sự kiện thay đổi (Để khi lên cấp hoặc lắp ngọc nó tự nhảy số)
+	table.insert(connections, stats.SatThuong.Changed:Connect(UpdateText))
+	table.insert(connections, stats.TocDoDanh.Changed:Connect(UpdateText))
+	table.insert(connections, hum.HealthChanged:Connect(UpdateText))
+
+	-- 3. Cập nhật Ngọc
+	CapNhatNgoc(unitModel)
+
+	-- Lắng nghe nếu lắp ngọc mới thì cập nhật lại ô ngọc
+	table.insert(connections, unitModel.AttributeChanged:Connect(function(attr)
+		if attr == "GemMain" or attr == "GemSupport" then
+			CapNhatNgoc(unitModel)
+		end
+	end))
+end
+
+-- LẮNG NGHE SỰ KIỆN CHỌN TỪ SCRIPT SO TIEN
+eventChonUnit.Event:Connect(function(unitModel)
+	HienThiThongTin(unitModel)
+end)
