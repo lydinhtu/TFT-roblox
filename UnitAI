@@ -6,8 +6,13 @@ local DO_CAO_NGHIA_DIA = 150
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local bienDangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau", 10)
 local workspace = game:GetService("Workspace")
-local ServerStorage = game:GetService("ServerStorage") -- [QUAN TRỌNG] Phải có dòng này
-local GemConfig = require(game.ReplicatedStorage:WaitForChild("GemConfig"))
+local ServerStorage = game:GetService("ServerStorage")
+
+-- [QUAN TRỌNG] Thêm dòng này để sửa lỗi
+local TweenService = game:GetService("TweenService") 
+
+-- Lấy Config để đọc chỉ số ngọc
+local GemConfig = require(ReplicatedStorage:WaitForChild("GemConfig"))
 
 local folderDatCho = workspace:FindFirstChild("DatCho") or Instance.new("Folder", workspace)
 if folderDatCho.Name ~= "DatCho" then folderDatCho.Name = "DatCho" end
