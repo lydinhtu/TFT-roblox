@@ -6,6 +6,7 @@ local DO_CAO_NGHIA_DIA = 150 -- Độ cao an toàn
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local bienDangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau", 10)
 local workspace = game:GetService("Workspace")
+local ServerStorage = game:GetService("ServerStorage") -- [MỚI] Thêm dòng này để gọi Event
 
 local folderDatCho = workspace:FindFirstChild("DatCho") or Instance.new("Folder", workspace)
 if folderDatCho.Name ~= "DatCho" then folderDatCho.Name = "DatCho" end
@@ -81,8 +82,7 @@ function UnitAI.KhoiTao(npc, config)
 		rootPart:SetNetworkOwner(nil)
 	end
 
-	-- [FIX 1] TẮT SÁT THƯƠNG RƠI & TRẠNG THÁI CHẾT
-	-- Điều này đảm bảo dù có rơi từ 150m xuống cũng không mất máu
+	-- TẮT SÁT THƯƠNG RƠI & TRẠNG THÁI CHẾT
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false) 
@@ -106,6 +106,18 @@ function UnitAI.KhoiTao(npc, config)
 	humanoid.HealthChanged:Connect(function(hp)
 		if hp <= 0 and not daChet then
 			if myTeam == "Enemy" then
+
+				-- >>> [CODE MỚI THÊM VÀO] BÁO TIN QUÁI CHẾT ĐỂ RỚT NGỌC <<<
+				local bindable = ServerStorage:FindFirstChild("EnemyDiedEvent")
+				if bindable then
+					-- Lấy người chơi đầu tiên (vì game này hiện tại 1 người chơi)
+					local player = game.Players:GetPlayers()[1]
+					if player then
+						bindable:Fire(player)
+					end
+				end
+				-- >>> KẾT THÚC CODE MỚI <<<
+
 				-- Quái vật -> Xóa sổ
 				daChet = true
 				DonDepSachSe(npc)
@@ -149,23 +161,19 @@ function UnitAI.KhoiTao(npc, config)
 
 			-- === 1. XỬ LÝ KHI ĐANG CHẾT GIẢ ===
 			if daChet then
-				-- Luôn giữ máu = 1 để không bị game xóa
 				if humanoid.Health < 1 then humanoid.Health = 1 end
 
 				if not dangDanhNhau then
-					-- [FIX 2] QUY TRÌNH HỒI SINH AN TOÀN
+					-- HỒI SINH
 					daChet = false
 					npc:SetAttribute("DaChet", nil)
 
-					-- B1: Dịch chuyển về nhà TRƯỚC (Vẫn đang Anchored=true)
-					-- Cộng thêm 3 đơn vị Y để chắc chắn không kẹt dưới đất
+					-- Dịch chuyển về nhà
 					rootPart.CFrame = CFrame.new(viTriNha + Vector3.new(0, 3, 0)) * rootPart.CFrame.Rotation
 					rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
 
-					-- B2: Đợi 1 nhịp nhỏ cho server xử lý vị trí
 					task.wait() 
 
-					-- B3: Hồi máu & Reset hình ảnh
 					humanoid.Health = humanoid.MaxHealth
 
 					for _, v in pairs(npc:GetChildren()) do
@@ -177,14 +185,11 @@ function UnitAI.KhoiTao(npc, config)
 						end
 					end
 
-					-- B4: Bật va chạm
 					for _, v in pairs(npc:GetDescendants()) do
 						if v:IsA("BasePart") then v.CanCollide = true end
 					end
 
-					-- B5: Cuối cùng mới thả Neo ra
 					rootPart.Anchored = false 
-
 					dangDanhNhauTruocDo = dangDanhNhau
 				end
 				continue 
@@ -198,12 +203,9 @@ function UnitAI.KhoiTao(npc, config)
 				if humanoid.Health < humanoid.MaxHealth then humanoid.Health = humanoid.MaxHealth end
 
 				if dangDanhNhauTruocDo then 
-					-- Vừa đánh xong -> Về vị trí cũ an toàn
 					rootPart.CFrame = CFrame.new(viTriNha + Vector3.new(0, 3, 0)) * rootPart.CFrame.Rotation
 					rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
 				else 
-					-- [FIX 3] CHỈ LƯU VỊ TRÍ NHÀ KHI ĐỨNG DƯỚI ĐẤT
-					-- Tránh lưu vị trí lúc đang bị hất tung lên trời
 					if rootPart.Position.Y < 5 and rootPart.AssemblyLinearVelocity.Magnitude < 0.1 then 
 						viTriNha = rootPart.Position 
 					end
@@ -218,7 +220,7 @@ function UnitAI.KhoiTao(npc, config)
 				local mucTieu = nil
 				local minDst = math.huge
 
-				-- Tìm địch (Quét cả folder LivingEnemies)
+				-- Tìm địch
 				QuetToanBoDonVi(function(v)
 					if v:IsA("Model") and v ~= npc and v:GetAttribute("DaChet") ~= true then
 						local h = v:FindFirstChild("Humanoid")
@@ -299,7 +301,7 @@ function UnitAI.KhoiTao(npc, config)
 						end
 					end
 				else
-					humanoid:MoveTo(rootPart.Position) -- Không thấy địch thì đứng yên
+					humanoid:MoveTo(rootPart.Position)
 				end
 			else
 				humanoid.WalkSpeed = 0
