@@ -5,7 +5,7 @@ local GemConfig = require(ReplicatedStorage:WaitForChild("GemConfig"))
 local remoteGemDrop = ReplicatedStorage:WaitForChild("SuKienNhatGem")
 local Mouse = Players.LocalPlayer:GetMouse()
 
--- Tạo RemoteEvent trang bị (nếu chưa có thì script sẽ đợi server tạo)
+-- Tạo RemoteEvent (Nếu chưa có)
 local remoteEquip = ReplicatedStorage:WaitForChild("SuKienTrangBiGem", 10) 
 
 local player = Players.LocalPlayer
@@ -31,9 +31,9 @@ layout.CellSize = UDim2.new(0.45, 0, 0.2, 0)
 layout.CellPadding = UDim2.new(0.03, 0, 0.02, 0)
 layout.Parent = frame
 
--- BIẾN LƯU TRẠNG THÁI CHỌN
+-- BIẾN LƯU TRẠNG THÁI
 local gemDangChon = nil 
-local lastButton = nil
+local lastButton = nil -- Nút đang được chọn (để xóa sau này)
 
 -- 2. HÀM THÊM GEM
 local function ThemGemVaoTui(gemID)
@@ -41,7 +41,7 @@ local function ThemGemVaoTui(gemID)
 	if not info then return end
 
 	local itemBtn = Instance.new("TextButton")
-	itemBtn.Name = gemID
+	itemBtn.Name = gemID -- Đặt tên nút là ID ngọc để dễ tìm
 	itemBtn.BackgroundColor3 = info.Color
 	itemBtn.Text = "" 
 	itemBtn.Parent = frame
@@ -71,42 +71,52 @@ local function ThemGemVaoTui(gemID)
 			-- Chọn mới
 			if lastButton then lastButton.BorderSizePixel = 0 end -- Reset nút cũ
 			gemDangChon = gemID
-			lastButton = itemBtn
-			itemBtn.BorderSizePixel = 4 -- Viền sáng lên
+			lastButton = itemBtn -- Lưu lại nút này để tí nữa Server bảo xóa thì xóa
+			itemBtn.BorderSizePixel = 4
 			itemBtn.BorderColor3 = Color3.new(1, 1, 1)
-			print("Đang cầm ngọc: " .. info.Name .. ". Hãy bấm vào lính để lắp!")
+			print("Đang cầm ngọc: " .. info.Name)
 		end
 	end)
 end
 
--- 3. CLICK VÀO LÍNH ĐỂ TRANG BỊ
+-- 3. CLICK VÀO LÍNH -> GỬI YÊU CẦU (KHÔNG XÓA NÚT Ở ĐÂY)
 Mouse.Button1Down:Connect(function()
 	if gemDangChon and Mouse.Target then
 		local model = Mouse.Target:FindFirstAncestorOfClass("Model")
 
-		-- Kiểm tra xem có phải lính phe ta không
 		if model and model:FindFirstChild("Humanoid") then
 			local stats = model.Humanoid:FindFirstChild("Stats")
 			if stats and stats:FindFirstChild("Team") and stats.Team.Value == "Ally" then
-
-				print("🛠️ Gửi yêu cầu trang bị " .. gemDangChon .. " cho " .. model.Name)
-
+				print("🛠️ Gửi yêu cầu lắp ngọc...")
 				if remoteEquip then
 					remoteEquip:FireServer(gemDangChon, model)
 				end
-
-				-- Reset sau khi trang bị
-				gemDangChon = nil
-				if lastButton then 
-					lastButton:Destroy() -- Xóa ngọc khỏi túi (hoặc giữ lại tùy bạn)
-					lastButton = nil
-				end
+				-- [QUAN TRỌNG] Không xóa nút ở đây nữa!
+				-- Chờ Server trả lời mới xóa.
 			end
 		end
 	end
 end)
 
--- 4. NHẬN NGỌC
+-- 4. NHẬN NGỌC MỚI TỪ SERVER
 remoteGemDrop.OnClientEvent:Connect(function(gemID)
 	ThemGemVaoTui(gemID)
+end)
+
+-- 5. [MỚI] NHẬN PHẢN HỒI LẮP THÀNH CÔNG -> XÓA NÚT
+remoteEquip.OnClientEvent:Connect(function(gemID, isSuccess)
+	if isSuccess then
+		print("🎉 Lắp thành công! Xóa ngọc khỏi túi.")
+
+		-- Xóa cái nút đang chọn (lastButton)
+		if lastButton and lastButton.Name == gemID then
+			lastButton:Destroy()
+			lastButton = nil
+			gemDangChon = nil
+		else
+			-- Nếu lỡ tay chọn cái khác rồi thì tìm trong túi để xóa
+			local nutCanXoa = frame:FindFirstChild(gemID)
+			if nutCanXoa then nutCanXoa:Destroy() end
+		end
+	end
 end)
