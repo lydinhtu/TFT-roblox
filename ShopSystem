@@ -1,7 +1,10 @@
--- === Script: ShopSystem (Client) - Đã sửa lỗi Humanoid ===
+-- === Script: ShopSystem (Client) ===
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local funcMuaLinh = ReplicatedStorage:WaitForChild("ChucNangMuaLinh")
+-- [MỚI] Lấy biến trạng thái
+local DangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
+
 local player = Players.LocalPlayer
 
 local DANH_SACH_POOL = {"LinhTa", "LinhTa2"}
@@ -104,7 +107,11 @@ local function TaoTheBai(tenUnit)
 	if tenUnit == "LinhTa" then uiStroke.Color = Color3.fromRGB(255, 170, 0) end
 	if tenUnit == "LinhTa2" then uiStroke.Color = Color3.fromRGB(0, 170, 255) end
 
+	-- [CLICK MUA TƯỚNG]
 	card.MouseButton1Click:Connect(function()
+		-- [MỚI] Chặn mua khi đánh nhau
+		if DangDanhNhau.Value == true then return end
+
 		local ketQua = funcMuaLinh:InvokeServer(tenUnit)
 		if ketQua == "ThanhCong" then
 			card:Destroy()
@@ -129,25 +136,27 @@ local function RerollShop()
 	end
 end
 
+-- [CLICK REROLL]
 btnReroll.MouseButton1Click:Connect(function()
+	-- [MỚI] Chặn reroll khi đánh nhau
+	if DangDanhNhau.Value == true then return end
+
 	RerollShop()
 end)
 
 RerollShop()
 
--- === 4. HỆ THỐNG ĐẾM LÍNH (ĐÃ SỬA LỖI 107) ===
+-- === 4. HỆ THỐNG ĐẾM LÍNH ===
 task.spawn(function()
 	while true do
 		task.wait(0.5) 
 		local soLuongLinh = 0
 
 		for _, v in pairs(workspace:GetChildren()) do
-			-- [QUAN TRỌNG] Kiểm tra Humanoid bằng FindFirstChild trước khi dùng
 			local human = v:FindFirstChild("Humanoid")
 			local root = v:FindFirstChild("HumanoidRootPart")
 
 			if human and root and not Players:GetPlayerFromCharacter(v) then
-				-- Chỉ đếm lính sống (không có attribute DaChet)
 				if v:GetAttribute("DaChet") ~= true then
 					soLuongLinh = soLuongLinh + 1
 				end
