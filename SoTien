@@ -1,28 +1,26 @@
+-- File: StarterGui/SoTien
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 local Mouse = player:GetMouse()
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- === PHẦN 1: HIỂN THỊ TIỀN (Code gốc của bạn) ===
-local textLabel = script.Parent -- Script này phải nằm bên trong TextLabel
+-- === PHẦN 1: HIỂN THỊ TIỀN ===
+local textLabel = script.Parent 
 local leaderstats = player:WaitForChild("leaderstats")
 local gold = leaderstats:WaitForChild("Gold")
 
 local function CapNhatTien()
 	textLabel.Text = tostring(gold.Value) .. " G"
 end
-
--- Cập nhật lần đầu và lắng nghe thay đổi
 CapNhatTien()
 gold.Changed:Connect(CapNhatTien)
 
-
--- === PHẦN 2: XỬ LÝ CLICK VÀ DI CHUYỂN (Code đã sửa lỗi) ===
+-- === PHẦN 2: XỬ LÝ CLICK VÀ DI CHUYỂN ===
 local SuKienDiChuyen = ReplicatedStorage:WaitForChild("SuKienDiChuyen")
 local DangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau")
 
-local UnitDangChon = nil -- Biến lưu con lính đang được chọn
-local SelectionBox = Instance.new("SelectionBox") -- Khung sáng bao quanh lính
+local UnitDangChon = nil 
+local SelectionBox = Instance.new("SelectionBox") 
 SelectionBox.Color3 = Color3.fromRGB(0, 255, 0)
 SelectionBox.LineThickness = 0.1
 
@@ -34,43 +32,60 @@ if not eventChonUnit then
 end
 
 Mouse.Button1Down:Connect(function()
-	if DangDanhNhau.Value == true then return end
-
 	local target = Mouse.Target
+
+	-- 1. CLICK VÀO KHÔNG GIAN TRỐNG -> HỦY CHỌN
 	if not target then 
-		-- [MỚI] Nếu bấm ra ngoài trời thì tắt bảng thông tin
 		eventChonUnit:Fire(nil) 
+		UnitDangChon = nil
+		SelectionBox.Adornee = nil
 		return 
 	end
 
-	-- A. NẾU BẤM VÀO MỘT CON LÍNH (PHE TA)
+	-- 2. CLICK VÀO LÍNH (ĐỂ CHỌN HOẶC XEM INFO)
 	local model = target:FindFirstAncestorOfClass("Model")
 	if model and model:FindFirstChild("Humanoid") then
 		local stats = model.Humanoid:FindFirstChild("Stats")
+
+		-- Chỉ chọn được lính phe mình
 		if stats and stats:FindFirstChild("Team") and stats.Team.Value == "Ally" then
 			UnitDangChon = model
 
-			-- Hiện khung chọn (Code cũ)
+			-- Hiện khung chọn
 			SelectionBox.Adornee = model
 			SelectionBox.Parent = model
 			print("👉 Đã chọn: " .. model.Name)
 
-			-- >>> [MỚI] GỬI TÍN HIỆU HIỆN BẢNG THÔNG TIN <<<
-			eventChonUnit:Fire(model)
-			-- >>> KẾT THÚC <<<
+			-- Gửi tín hiệu hiện bảng thông tin (Luôn chạy kể cả đang đánh nhau)
+			eventChonUnit:Fire(model) 
 
-			return 
+			return -- Dừng lại tại đây (Chỉ chọn thôi, chưa làm gì khác)
 		end
 	end
 
-	-- Nếu bấm trúng cái gì khác (đất, quái...) mà không phải lính mình
-	-- Thì ẩn bảng thông tin đi cho đỡ vướng
-	if not UnitDangChon then
-		eventChonUnit:Fire(nil)
-	end
+	-- 3. CLICK VÀO ĐẤT (ĐỂ DI CHUYỂN)
+	-- [QUAN TRỌNG] Chỉ cho phép di chuyển nếu KHÔNG ĐÁNH NHAU
+	if DangDanhNhau.Value == false then
 
-	-- B. DI CHUYỂN (Code cũ giữ nguyên)
-	if UnitDangChon and (target.Name == "SanDau" or target.Name:match("Tile") or target.Name:match("Slot")) then
-		-- ... (Code di chuyển cũ) ...
+		if UnitDangChon and (target.Name == "SanDau" or target.Name:match("Tile") or target.Name:match("Slot")) then
+			print("🎯 Gửi lệnh di chuyển đến: " .. target.Name)
+
+			local viTriClick = Mouse.Hit.Position
+			SuKienDiChuyen:FireServer(UnitDangChon, viTriClick)
+
+			-- Bỏ chọn sau khi di chuyển xong (Hoặc giữ lại tùy bạn)
+			UnitDangChon = nil
+			SelectionBox.Adornee = nil
+			SelectionBox.Parent = nil
+			eventChonUnit:Fire(nil) -- Tắt bảng info nếu muốn
+		end
+
+	else
+		-- Nếu đang đánh nhau mà bấm xuống đất -> Bỏ chọn
+		if UnitDangChon and not model then
+			UnitDangChon = nil
+			SelectionBox.Adornee = nil
+			eventChonUnit:Fire(nil)
+		end
 	end
 end)
