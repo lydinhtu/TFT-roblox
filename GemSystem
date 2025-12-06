@@ -80,3 +80,60 @@ remoteEquip.OnServerEvent:Connect(function(player, gemID, unitModel)
 
 	game.Debris:AddItem(highlight, 0.5) -- Xóa hiệu ứng sau 0.5s
 end)
+-- ... (Phần trên của GemSystem giữ nguyên) ...
+
+local remoteEquip = ReplicatedStorage:FindFirstChild("SuKienTrangBiGem") or Instance.new("RemoteEvent")
+remoteEquip.Name = "SuKienTrangBiGem"
+remoteEquip.Parent = ReplicatedStorage
+
+-- XỬ LÝ LẮP NGỌC THÔNG MINH
+remoteEquip.OnServerEvent:Connect(function(player, gemID, unitModel)
+	if not unitModel or not unitModel:FindFirstChild("Humanoid") then return end
+
+	local gemInfo = GemConfig[gemID]
+	if not gemInfo then return end
+
+	-- Lấy tên gốc của tướng (đã được ShopManager set lúc mua)
+	local tenUnitGoc = unitModel:GetAttribute("TenUnit") -- Ví dụ: "LinhTa1", "LinhTa2"
+
+	-- 1. KIỂM TRA ĐIỀU KIỆN TƯỚNG (Cho ngọc Active)
+	if gemInfo.AllowedUnits then
+		local duocPhep = false
+		for _, u in pairs(gemInfo.AllowedUnits) do
+			if u == tenUnitGoc then 
+				duocPhep = true 
+				break
+			end
+		end
+
+		if not duocPhep then
+			warn("⛔ Ngọc này không dành cho " .. (tenUnitGoc or "Unit này") .. "!")
+			return -- Dừng lại, không cho lắp
+		end
+	end
+
+	-- 2. XỬ LÝ THEO LOẠI NGỌC
+	if gemInfo.Type == "Active" then
+		-- Lắp vào slot Chính
+		unitModel:SetAttribute("GemMain", gemID)
+		print("✅ Đã lắp Skill Chính: " .. gemInfo.Name)
+
+	elseif gemInfo.Type == "Support" then
+		-- Kiểm tra xem có Skill Chính chưa
+		if unitModel:GetAttribute("GemMain") then
+			-- Lắp vào slot Hỗ Trợ
+			unitModel:SetAttribute("GemSupport", gemID)
+			print("✅ Đã lắp Hỗ Trợ: " .. gemInfo.Name)
+		else
+			warn("⛔ Phải có ngọc Kỹ Năng trước mới được lắp ngọc Hỗ Trợ!")
+			return -- Dừng lại
+		end
+	end
+
+	-- Hiệu ứng thành công
+	local highlight = Instance.new("Highlight")
+	highlight.FillColor = Color3.fromRGB(255, 255, 255)
+	highlight.OutlineColor = gemInfo.Color
+	highlight.Parent = unitModel
+	game.Debris:AddItem(highlight, 0.5)
+end)
