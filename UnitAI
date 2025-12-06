@@ -2,16 +2,16 @@ local UnitAI = {}
 
 -- === CẤU HÌNH ===
 local KICH_THUOC_O = 6 
-local DO_CAO_NGHIA_DIA = 150 -- Độ cao an toàn
+local DO_CAO_NGHIA_DIA = 150 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local bienDangDanhNhau = ReplicatedStorage:WaitForChild("DangDanhNhau", 10)
 local workspace = game:GetService("Workspace")
-local ServerStorage = game:GetService("ServerStorage") -- [MỚI] Thêm dòng này để gọi Event
+local ServerStorage = game:GetService("ServerStorage") -- [QUAN TRỌNG] Phải có dòng này
+local GemConfig = require(game.ReplicatedStorage:WaitForChild("GemConfig"))
 
 local folderDatCho = workspace:FindFirstChild("DatCho") or Instance.new("Folder", workspace)
 if folderDatCho.Name ~= "DatCho" then folderDatCho.Name = "DatCho" end
 
--- Hàm lấy tâm ô
 local function LayTamO(position, yPos)
 	local nuaO = KICH_THUOC_O / 2
 	local x = (math.floor(position.X / KICH_THUOC_O) * KICH_THUOC_O) + nuaO
@@ -19,32 +19,25 @@ local function LayTamO(position, yPos)
 	return Vector3.new(x, yPos, z)
 end
 
--- Hàm quét đơn vị thông minh (Quét cả Folder LivingEnemies)
 local function QuetToanBoDonVi(action)
 	for _, v in pairs(workspace:GetChildren()) do action(v) end
 	local folder = workspace:FindFirstChild("LivingEnemies")
 	if folder then for _, v in pairs(folder:GetChildren()) do action(v) end end
 end
 
--- Hàm kiểm tra ô trống
 local function KiemTraOTrong(viTri, npcIgnore)
 	local posO = Vector3.new(viTri.X, 0, viTri.Z)
 	local isTrong = true
-
 	QuetToanBoDonVi(function(v)
 		if not isTrong then return end 
 		if v:IsA("Model") and v ~= npcIgnore and v:GetAttribute("DaChet") ~= true then
 			local root = v:FindFirstChild("HumanoidRootPart")
 			if root then
 				local posVatCan = Vector3.new(root.Position.X, 0, root.Position.Z)
-				-- Chỉ tránh những thằng đang ở dưới đất
-				if root.Position.Y < 50 and (posVatCan - posO).Magnitude < 2.5 then 
-					isTrong = false
-				end
+				if root.Position.Y < 50 and (posVatCan - posO).Magnitude < 2.5 then isTrong = false end
 			end
 		end
 	end)
-
 	if not isTrong then return false end
 	for _, gach in pairs(folderDatCho:GetChildren()) do
 		local posGach = Vector3.new(gach.Position.X, 0, gach.Position.Z)
@@ -78,11 +71,8 @@ function UnitAI.KhoiTao(npc, config)
 	local rootPart = npc:WaitForChild("HumanoidRootPart")
 	local stats = humanoid:WaitForChild("Stats")
 
-	if rootPart:CanSetNetworkOwnership() then
-		rootPart:SetNetworkOwner(nil)
-	end
+	if rootPart:CanSetNetworkOwnership() then rootPart:SetNetworkOwner(nil) end
 
-	-- TẮT SÁT THƯƠNG RƠI & TRẠNG THÁI CHẾT
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
 	humanoid:SetStateEnabled(Enum.HumanoidStateType.Dead, false) 
@@ -99,51 +89,46 @@ function UnitAI.KhoiTao(npc, config)
 	local attackTrack = humanoid:LoadAnimation(animObj)
 
 	local daChet = false
-	local viTriNha = rootPart.Position -- Vị trí ban đầu
+	local viTriNha = rootPart.Position
 	local dangDanhNhauTruocDo = false
 
-	-- [[ SỰ KIỆN MẤT MÁU ]]
 	humanoid.HealthChanged:Connect(function(hp)
 		if hp <= 0 and not daChet then
 			if myTeam == "Enemy" then
 
-				-- >>> [CODE MỚI THÊM VÀO] BÁO TIN QUÁI CHẾT ĐỂ RỚT NGỌC <<<
+				-- >>> [ĐOẠN CODE BẠN BỊ THIẾU] <<<
+				-- Báo tin quái chết cho GemSystem
 				local bindable = ServerStorage:FindFirstChild("EnemyDiedEvent")
 				if bindable then
-					-- Lấy người chơi đầu tiên (vì game này hiện tại 1 người chơi)
+					-- Tìm người chơi để tặng ngọc (Lấy người chơi đầu tiên trong server)
 					local player = game.Players:GetPlayers()[1]
 					if player then
+						print("💀 Quái chết! Gửi tín hiệu rớt đồ...")
 						bindable:Fire(player)
 					end
+				else
+					warn("⚠️ Lỗi: Không tìm thấy EnemyDiedEvent trong ServerStorage!")
 				end
-				-- >>> KẾT THÚC CODE MỚI <<<
+				-- >>> KẾT THÚC ĐOẠN THIẾU <<<
 
-				-- Quái vật -> Xóa sổ
 				daChet = true
 				DonDepSachSe(npc)
 				npc:Destroy()
 			else
-				-- Lính ta -> Chết giả (Đưa lên trời)
+				-- Lính ta chết giả
 				daChet = true
 				npc:SetAttribute("DaChet", true)
-
-				humanoid.Health = 1 -- Giữ 1 máu
+				humanoid.Health = 1
 				humanoid.WalkSpeed = 0
 				if attackTrack then attackTrack:Stop() end
-
-				-- Khóa cứng và đưa lên trời
 				rootPart.Anchored = true
 				rootPart.CFrame = rootPart.CFrame + Vector3.new(0, DO_CAO_NGHIA_DIA, 0)
-				rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0) -- Ngắt lực vật lý
-
-				-- Làm mờ
+				rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
 				for _, v in pairs(npc:GetChildren()) do
 					if v:IsA("BasePart") and v.Name ~= "HumanoidRootPart" then
 						v.Transparency = 0.5
 						v.CastShadow = false
-					elseif v:IsA("BillboardGui") then
-						v.Enabled = false
-					end
+					elseif v:IsA("BillboardGui") then v.Enabled = false end
 				end
 				for _, v in pairs(npc:GetDescendants()) do
 					if v:IsA("BasePart") then v.CanCollide = false end
@@ -153,55 +138,40 @@ function UnitAI.KhoiTao(npc, config)
 		end
 	end)
 
-	-- [[ VÒNG LẶP AI ]]
 	task.spawn(function()
 		while npc.Parent do
 			task.wait(0.1)
 			local dangDanhNhau = bienDangDanhNhau.Value
 
-			-- === 1. XỬ LÝ KHI ĐANG CHẾT GIẢ ===
 			if daChet then
 				if humanoid.Health < 1 then humanoid.Health = 1 end
-
 				if not dangDanhNhau then
-					-- HỒI SINH
 					daChet = false
 					npc:SetAttribute("DaChet", nil)
-
-					-- Dịch chuyển về nhà
 					rootPart.CFrame = CFrame.new(viTriNha + Vector3.new(0, 3, 0)) * rootPart.CFrame.Rotation
 					rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
-
 					task.wait() 
-
 					humanoid.Health = humanoid.MaxHealth
-
 					for _, v in pairs(npc:GetChildren()) do
 						if v:IsA("BasePart") and v.Name ~= "HumanoidRootPart" then
 							v.Transparency = 0
 							v.CastShadow = true
-						elseif v:IsA("BillboardGui") then
-							v.Enabled = true
-						end
+						elseif v:IsA("BillboardGui") then v.Enabled = true end
 					end
-
 					for _, v in pairs(npc:GetDescendants()) do
 						if v:IsA("BasePart") then v.CanCollide = true end
 					end
-
 					rootPart.Anchored = false 
 					dangDanhNhauTruocDo = dangDanhNhau
 				end
 				continue 
 			end
 
-			-- === 2. XỬ LÝ KHI HẾT TRẬN (VỀ CHỖ CŨ) ===
 			if not dangDanhNhau then
 				humanoid.WalkSpeed = 0
 				rootPart.Anchored = false
 				DonDepSachSe(npc)
 				if humanoid.Health < humanoid.MaxHealth then humanoid.Health = humanoid.MaxHealth end
-
 				if dangDanhNhauTruocDo then 
 					rootPart.CFrame = CFrame.new(viTriNha + Vector3.new(0, 3, 0)) * rootPart.CFrame.Rotation
 					rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
@@ -215,12 +185,9 @@ function UnitAI.KhoiTao(npc, config)
 			end
 			dangDanhNhauTruocDo = dangDanhNhau
 
-			-- === 3. XỬ LÝ TRONG TRẬN ĐẤU (AI TÌM ĐỊCH) ===
 			if npc:GetAttribute("DaRaTran") then
 				local mucTieu = nil
 				local minDst = math.huge
-
-				-- Tìm địch
 				QuetToanBoDonVi(function(v)
 					if v:IsA("Model") and v ~= npc and v:GetAttribute("DaChet") ~= true then
 						local h = v:FindFirstChild("Humanoid")
@@ -240,38 +207,95 @@ function UnitAI.KhoiTao(npc, config)
 				if mucTieu then
 					local tamDanhThucTe = math.max(statsTamDanh.Value, KICH_THUOC_O - 1)
 					local dist = (rootPart.Position - mucTieu.Position).Magnitude
-
 					if dist <= tamDanhThucTe then
-						-- TẤN CÔNG
 						local lookPos = Vector3.new(mucTieu.Position.X, rootPart.Position.Y, mucTieu.Position.Z)
 						rootPart.CFrame = CFrame.lookAt(rootPart.Position, lookPos)
-
 						humanoid.WalkSpeed = 0
 						DonDepSachSe(npc)
 						attackTrack:Play()
-						task.wait(0.3)
+						task.wait(0.3) -- Đợi vung tay
 
-						if config.KyNangTanCong then
-							config.KyNangTanCong(npc, mucTieu, statsSatThuong.Value)
+						-- [LOGIC MỚI] KIỂM TRA NGỌC
+						local gemID = npc:GetAttribute("GemID")
+						local gemInfo = GemConfig[gemID]
+
+						if gemID and gemInfo and gemInfo.Type == "Active" then
+							-- === TRƯỜNG HỢP 1: CÓ NGỌC KỸ NĂNG ===
+							print("🔥 Dùng kỹ năng ngọc: " .. gemInfo.Name)
+
+							-- TÍNH SÁT THƯƠNG (Gốc * Hệ số ngọc)
+							local finalDamage = statsSatThuong.Value * gemInfo.DamagePercent
+
+							-- [VÍ DỤ KỸ NĂNG: CẦU LỬA]
+							if gemID == "CauLua" then
+								local ball = Instance.new("Part")
+								ball.Shape = Enum.PartType.Ball
+								ball.Size = Vector3.new(2,2,2)
+								ball.Color = gemInfo.Color
+								ball.Material = Enum.Material.Neon
+								ball.CanCollide = false
+								ball.Position = rootPart.Position + Vector3.new(0,2,0)
+								ball.Parent = workspace
+
+								-- Bay tới địch
+								local tweenService = game:GetService("TweenService")
+								local tween = tweenService:Create(ball, TweenInfo.new(0.5), {Position = mucTieu.Position})
+								tween:Play()
+
+								tween.Completed:Connect(function()
+									ball:Destroy()
+									-- Gây nổ diện rộng
+									local explosion = Instance.new("Explosion")
+									explosion.Position = mucTieu.Position
+									explosion.BlastRadius = 8
+									explosion.BlastPressure = 0 -- Không đẩy bay lính
+									explosion.Parent = workspace
+
+									-- Trừ máu kẻ địch xung quanh
+									if mucTieu.Parent then
+										local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
+										if eHum then eHum:TakeDamage(finalDamage) end
+									end
+								end)
+
+								-- [VÍ DỤ KỸ NĂNG: BĂNG GIÁ]
+							elseif gemID == "BangGia" then
+								-- (Bạn có thể code thêm logic bắn băng làm chậm ở đây)
+								if mucTieu.Parent then
+									local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
+									if eHum then 
+										eHum:TakeDamage(finalDamage)
+										eHum.WalkSpeed = 8 -- Làm chậm
+									end
+								end
+							end
+
 						else
-							if mucTieu.Parent then
-								local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
-								if eHum then eHum:TakeDamage(statsSatThuong.Value) end
+							-- === TRƯỜNG HỢP 2: ĐÁNH THƯỜNG (HOẶC NGỌC SUPPORT) ===
+							if config.KyNangTanCong then
+								config.KyNangTanCong(npc, mucTieu, statsSatThuong.Value)
+							else
+								if mucTieu.Parent then
+									local eHum = mucTieu.Parent:FindFirstChild("Humanoid")
+									if eHum then eHum:TakeDamage(statsSatThuong.Value) end
+								end
 							end
 						end
-						task.wait(math.max(0.1, (1 / statsTocDoDanh.Value) - 0.3))
 
+						-- Hồi chiêu (Nếu có ngọc thì dùng hồi chiêu của ngọc, không thì dùng tốc đánh)
+						local delayTime = 0
+						if gemInfo and gemInfo.Cooldown then
+							delayTime = gemInfo.Cooldown
+						else
+							delayTime = math.max(0.1, (1 / statsTocDoDanh.Value) - 0.3)
+						end
+						task.wait(delayTime)
 					else
-						-- DI CHUYỂN
 						humanoid.WalkSpeed = statsTocDoDiChuyen.Value
 						local tamO_HienTai = LayTamO(rootPart.Position, rootPart.Position.Y)
 						local oTotNhat = nil
 						local kcMin = math.huge
-
-						local cacHuong = {
-							Vector3.new(KICH_THUOC_O, 0, 0), Vector3.new(-KICH_THUOC_O, 0, 0),
-							Vector3.new(0, 0, KICH_THUOC_O), Vector3.new(0, 0, -KICH_THUOC_O)
-						}
+						local cacHuong = {Vector3.new(KICH_THUOC_O, 0, 0), Vector3.new(-KICH_THUOC_O, 0, 0), Vector3.new(0, 0, KICH_THUOC_O), Vector3.new(0, 0, -KICH_THUOC_O)}
 						for _, huong in ipairs(cacHuong) do
 							local oThu = tamO_HienTai + huong
 							if KiemTraOTrong(oThu, npc) then
@@ -282,11 +306,9 @@ function UnitAI.KhoiTao(npc, config)
 								end
 							end
 						end
-
 						if oTotNhat then
 							local cucGach = DatChoVaDiChuyen(npc, oTotNhat)
 							humanoid:MoveTo(oTotNhat)
-
 							local timeOut = 0
 							while timeOut < 20 do
 								task.wait(0.05)
